@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "unifi-protect": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-unifi-protect/dist/cli.js"],
+      "env": {
+        "UNIFI_PROTECT_HOST": "192.168.1.1",
+        "UNIFI_PROTECT_USERNAME": "mcp",
+        "UNIFI_PROTECT_PASSWORD": "",
+        "UNIFI_PROTECT_ALLOW_WRITES": ""
+      }
+    }
+  }
+}
