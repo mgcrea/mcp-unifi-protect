@@ -1,0 +1,18 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+coverage
+.idea
+.vscode
+
+# Holds a live console cookie and a CSRF token.
+session.json
+# The natural place to paste a real password while testing.
+.mcp.json
+# Certificates, if someone exports the console's for strict TLS.
+*.pem
+*.crt
