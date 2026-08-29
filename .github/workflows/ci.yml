@@ -84,7 +84,7 @@ jobs:
             || { echo "read tools missing when configured"; exit 1; }
           # The negative half of the promise: a write tool must not merely
           # refuse when writes are off, it must not be registered at all.
-          for t in reboot_nvr reboot_camera update_camera set_camera_recording_mode ptz_goto_preset; do
+          for t in reboot_nvr reboot_camera update_camera set_camera_recording_mode; do
             ! grep -q "\"name\":\"unifi_protect_$t\"" /tmp/ro.json \
               || { echo "write tool $t leaked without UNIFI_PROTECT_ALLOW_WRITES"; exit 1; }
           done
@@ -95,7 +95,7 @@ jobs:
             UNIFI_PROTECT_HOST=192.168.1.1 UNIFI_PROTECT_USERNAME=ci UNIFI_PROTECT_PASSWORD=ci \
             UNIFI_PROTECT_ALLOW_WRITES=1 \
             node dist/cli.js 2>/dev/null > /tmp/rw.json
-          for t in reboot_nvr update_camera ptz_goto_preset; do
+          for t in reboot_nvr update_camera set_camera_recording_mode; do
             grep -q "\"name\":\"unifi_protect_$t\"" /tmp/rw.json \
               || { echo "write tool $t missing with UNIFI_PROTECT_ALLOW_WRITES=1"; exit 1; }
           done

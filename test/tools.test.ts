@@ -65,6 +65,8 @@ const READ_TOOLS = [
   "unifi_protect_list_events",
   "unifi_protect_list_lights",
   "unifi_protect_list_liveviews",
+  "unifi_protect_list_ptz_patrols",
+  "unifi_protect_list_ptz_presets",
   "unifi_protect_list_sensors",
   "unifi_protect_list_users",
   "unifi_protect_list_viewers",
@@ -72,9 +74,6 @@ const READ_TOOLS = [
 ];
 
 const WRITE_TOOLS = [
-  "unifi_protect_ptz_goto_preset",
-  "unifi_protect_ptz_start_patrol",
-  "unifi_protect_ptz_stop_patrol",
   "unifi_protect_reboot_camera",
   "unifi_protect_reboot_nvr",
   "unifi_protect_set_camera_recording_mode",

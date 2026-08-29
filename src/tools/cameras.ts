@@ -138,6 +138,36 @@ export const registerCameraTools = (
       }),
   );
 
+  server.registerTool(
+    "unifi_protect_list_ptz_presets",
+    {
+      description:
+        "List a PTZ camera's saved preset positions, with the slot number each one lives at. " +
+        "Only meaningful for cameras reporting hasPtz: true in unifi_protect_list_cameras. " +
+        "There is no tool to MOVE a PTZ camera or run a patrol: those commands exist only on " +
+        "Ubiquiti's official Integration API (a separate X-API-KEY auth this server does not " +
+        "use), not on the private API this server wraps — presets are created and driven from " +
+        "the Protect app itself.",
+      inputSchema: { cameraId: cameraIdArg },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ cameraId }) =>
+      wrap(() => client.get(`cameras/${encodeURIComponent(cameraId)}/ptz/preset`)),
+  );
+
+  server.registerTool(
+    "unifi_protect_list_ptz_patrols",
+    {
+      description:
+        "List a PTZ camera's saved patrol routes. See unifi_protect_list_ptz_presets for why " +
+        "there is no tool to start or stop one.",
+      inputSchema: { cameraId: cameraIdArg },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ cameraId }) =>
+      wrap(() => client.get(`cameras/${encodeURIComponent(cameraId)}/ptz/patrol`)),
+  );
+
   if (!ctx.allowWrites) return;
 
   server.registerTool(
@@ -222,55 +252,6 @@ export const registerCameraTools = (
           }),
         ),
       ),
-  );
-
-  server.registerTool(
-    "unifi_protect_ptz_goto_preset",
-    {
-      description:
-        "Point a PTZ camera at a saved preset position. Only works on cameras reporting " +
-        "hasPtz: true in unifi_protect_list_cameras — a fixed camera returns an error. Presets " +
-        "are created in the Protect app; slot -1 is the camera's home position.",
-      inputSchema: {
-        cameraId: cameraIdArg,
-        slot: z
-          .number()
-          .int()
-          .min(-1)
-          .describe("Preset slot number. -1 is home; saved presets start at 0."),
-      },
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-    },
-    async ({ cameraId, slot }) =>
-      wrap(() => client.post(`cameras/${encodeURIComponent(cameraId)}/ptz/goto/${slot}`)),
-  );
-
-  server.registerTool(
-    "unifi_protect_ptz_start_patrol",
-    {
-      description:
-        "Start a PTZ camera cycling through a saved patrol route. It keeps moving until " +
-        "unifi_protect_ptz_stop_patrol is called, so a camera left patrolling will not be " +
-        "pointing anywhere in particular later.",
-      inputSchema: {
-        cameraId: cameraIdArg,
-        slot: z.number().int().min(0).describe("Patrol slot number, as configured in Protect."),
-      },
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-    },
-    async ({ cameraId, slot }) =>
-      wrap(() => client.post(`cameras/${encodeURIComponent(cameraId)}/ptz/patrol/start/${slot}`)),
-  );
-
-  server.registerTool(
-    "unifi_protect_ptz_stop_patrol",
-    {
-      description: "Stop a PTZ camera's active patrol, leaving it wherever it currently points.",
-      inputSchema: { cameraId: cameraIdArg },
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-    },
-    async ({ cameraId }) =>
-      wrap(() => client.post(`cameras/${encodeURIComponent(cameraId)}/ptz/patrol/stop`)),
   );
 
   server.registerTool(

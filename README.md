@@ -112,7 +112,7 @@ printf '%s\n' \
 
 ## Tools
 
-18 read tools, plus 12 more when writes are enabled.
+20 read tools, plus 9 more when writes are enabled.
 
 | Tool                                              | What it does                                                                                        | Writes                 |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------- |
