@@ -1,0 +1,229 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Test on node@${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # The oldest node engines.node claims, plus current LTS. An untested
+        # floor is a guess — every Dockerfile here is node 24.
+        node: ["22", "lts/*"]
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v5
+      - name: Setup pnpm 🔧
+        uses: pnpm/action-setup@v6
+      - name: Setup node 🔧
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          check-latest: true
+          cache: "pnpm"
+      - name: Install 🪄
+        run: pnpm install --frozen-lockfile
+      - name: Lint 🔍
+        run: pnpm run lint
+      - name: Format 🔍
+        run: pnpm run format:check
+      - name: TypeScript 🔍
+        run: pnpm run typecheck
+      - name: Test 🧪
+        run: pnpm run test
+      - name: Build 📦
+        run: pnpm run build
+      # The tool list is the server's public contract and is easy to change by
+      # accident. All three states are asserted against the BUILT bundle, which
+      # is the only check that catches a bundle that no longer starts or a `bin`
+      # pointing at a file that does not exist.
+      #
+      # The empty UNIFI_PROTECT_* assignments matter: they neutralise anything
+      # in the ambient environment, so the test asserts the same thing on a
+      # developer's machine as it does here. (An env var set to "" reads as
+      # unset, by design — see `trimmed` in src/config.ts.)
+      - name: MCP smoke test 🧪
+        run: |
+          req() {
+            printf '%s\n' \
+              '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+              '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+              '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+          }
+
+          # 1. No credentials at all. The server MUST stay up and answer
+          # tools/list: one that exits here shows in the client as a bare
+          # "Connection closed" with stderr swallowed, so the message that
+          # would have explained what to configure never reaches anyone.
+          req | env HOME=/nonexistent UNIFI_PROTECT_CONFIG=/nonexistent.json \
+            UNIFI_PROTECT_HOST= UNIFI_PROTECT_USERNAME= UNIFI_PROTECT_PASSWORD= \
+            UNIFI_PROTECT_ALLOW_WRITES= \
+            node dist/cli.js 2>/dev/null > /tmp/none.json
+          grep -q '"name":"unifi_protect_auth_status"' /tmp/none.json \
+            || { echo "server did not answer tools/list without credentials"; exit 1; }
+          ! grep -q '"name":"unifi_protect_list_cameras"' /tmp/none.json \
+            || { echo "console tools registered with no console configured"; exit 1; }
+
+          # 2. Configured, writes off — the default install.
+          req | env HOME=/nonexistent UNIFI_PROTECT_CONFIG=/nonexistent.json \
+            UNIFI_PROTECT_HOST=192.168.1.1 UNIFI_PROTECT_USERNAME=ci UNIFI_PROTECT_PASSWORD=ci \
+            UNIFI_PROTECT_ALLOW_WRITES= \
+            node dist/cli.js 2>/dev/null > /tmp/ro.json
+          grep -q '"name":"unifi_protect_list_events"' /tmp/ro.json \
+            || { echo "read tools missing when configured"; exit 1; }
+          # The negative half of the promise: a write tool must not merely
+          # refuse when writes are off, it must not be registered at all.
+          for t in reboot_nvr reboot_camera update_camera set_camera_recording_mode ptz_goto_preset; do
+            ! grep -q "\"name\":\"unifi_protect_$t\"" /tmp/ro.json \
+              || { echo "write tool $t leaked without UNIFI_PROTECT_ALLOW_WRITES"; exit 1; }
+          done
+
+          # 3. Writes on — the gated tools must actually appear, or the flag is
+          # silently doing nothing and nobody would notice.
+          req | env HOME=/nonexistent UNIFI_PROTECT_CONFIG=/nonexistent.json \
+            UNIFI_PROTECT_HOST=192.168.1.1 UNIFI_PROTECT_USERNAME=ci UNIFI_PROTECT_PASSWORD=ci \
+            UNIFI_PROTECT_ALLOW_WRITES=1 \
+            node dist/cli.js 2>/dev/null > /tmp/rw.json
+          for t in reboot_nvr update_camera ptz_goto_preset; do
+            grep -q "\"name\":\"unifi_protect_$t\"" /tmp/rw.json \
+              || { echo "write tool $t missing with UNIFI_PROTECT_ALLOW_WRITES=1"; exit 1; }
+          done
+          echo "MCP smoke test passed: 3 states, gating verified in both directions."
+
+  publish-npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    # id-token: write is required for OIDC trusted publishing + provenance
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v5
+      - name: Setup pnpm 🔧
+        uses: pnpm/action-setup@v6
+      - name: Setup node 🔧
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: "pnpm"
+          registry-url: https://registry.npmjs.org
+      - name: Install 🪄
+        run: pnpm install --frozen-lockfile
+      - name: Upgrade npm 🔧
+        # OIDC trusted publishing needs a recent npm CLI
+        run: npm install -g npm@latest
+      # A version already on npm cannot be republished, so re-running this job
+      # would fail on a duplicate. Skip instead, so pushing a tag is always safe.
+      - name: Check npm for this version 🔍
+        id: published
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$name@$version is already published — skipping publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish 🚀
+        if: steps.published.outputs.exists == 'false'
+        run: npm publish --provenance --access public
+
+  github-release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v5
+      - name: Create release 🏷️
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+
+  docker:
+    name: Docker (build & push)
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    # id-token: write is required for cosign keyless signing
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v5
+
+      - name: Git metadata 🏷️
+        id: git
+        run: |
+          echo "commit=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "date=$(git log -1 --format=%cI)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup QEMU 🧰
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Buildx 🧰
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR 🔐
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata 🏷️
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=sha,format=short
+
+      - name: Build & push 🚢
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: true
+          sbom: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_COMMIT=${{ steps.git.outputs.commit }}
+            GIT_COMMIT_DATE=${{ steps.git.outputs.date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Setup cosign 🔏
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image 🔏
+        run: cosign sign --yes "ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}"
