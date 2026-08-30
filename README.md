@@ -190,6 +190,10 @@ console, and both now handled in either form:
 - **Storage moved.** 6.x had `nvr.storageInfo` with `totalSize` / `totalSpaceUsed`. By 7.2 that
   key is gone; the numbers live under `nvr.systemInfo.storage` and `nvr.storageStats`, with
   per-disk health in `systemInfo.ustorage.disks`.
+- **A camera has no `ledLevel`.** The 0-6 brightness that looks like it belongs there is a
+  _floodlight_ field; a camera's LED is the on/off `ledSettings.isEnabled`. Sub-objects also
+  deep-merge on PATCH, so setting one OSD overlay preserves the others — verified by writing to
+  a live camera and reading it back.
 - **An event's `thumbnail` field is not a thumbnail id you can use here.** It reads `e-<eventId>`
   and belongs to the `thumbnails/<id>` endpoint; `events/<eventId>/thumbnail` — the one this
   server calls — wants the bare event id. Passing the console's own value returns 404. So list

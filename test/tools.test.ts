@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { staticSessionProvider } from "../src/client/auth.js";
 import type { Config } from "../src/config.js";
 import { createServer } from "../src/server.js";
+import { calledInit } from "./helpers.js";
 
 const baseConfig: Config = {
   baseUrl: "https://192.168.1.1",
@@ -138,6 +139,42 @@ describe("tool registration", () => {
     };
     expect(payload.configured).toBe(false);
     expect(payload.setup.join(" ")).toContain("UNIFI_PROTECT_HOST");
+  });
+
+  it("update_camera sends only the fields passed, in the console's own schema", async () => {
+    // Verified against a live console on 7.2.105: a camera has NO top-level
+    // `ledLevel` (that is a floodlight field) and its ledSettings block is
+    // {isEnabled, welcomeLed, floodLed} — an earlier version sent a
+    // fabricated `isLedForced`. The console deep-merges, so sending one key
+    // inside osdSettings preserves its siblings.
+    const fetchImpl = vi.fn(async () => jsonResponse({ id: "cam1", name: "Cuisine" }));
+    const client = await connect(
+      { ...baseConfig, allowWrites: true },
+      fetchImpl as unknown as typeof fetch,
+    );
+    await client.callTool({
+      name: "unifi_protect_update_camera",
+      arguments: { cameraId: "cam1", osdDate: true, statusLedEnabled: true },
+    });
+    const init = calledInit<{ body: string }>(fetchImpl);
+    expect(JSON.parse(init.body)).toEqual({
+      osdSettings: { isDateEnabled: true },
+      ledSettings: { isEnabled: true },
+    });
+  });
+
+  it("update_camera refuses an empty patch instead of sending one", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({}));
+    const client = await connect(
+      { ...baseConfig, allowWrites: true },
+      fetchImpl as unknown as typeof fetch,
+    );
+    const result = await client.callTool({
+      name: "unifi_protect_update_camera",
+      arguments: { cameraId: "cam1" },
+    });
+    expect(result.isError).toBe(true);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("auth_status probes the console rather than reporting stale cached state", async () => {

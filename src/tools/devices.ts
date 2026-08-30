@@ -77,7 +77,8 @@ export const registerDeviceTools = (
     {
       description:
         "Change a floodlight's settings — brightness, whether the light is on, and the PIR " +
-        "sensitivity that decides when it triggers. Only the fields you pass are sent.",
+        "sensitivity that decides when it triggers. Only the fields you pass are sent, and the " +
+        "console merges them, so the PIR duration and lux sensitivity you do not pass survive.",
       inputSchema: {
         lightId: idArg("Light", "unifi_protect_list_lights"),
         isLightOn: z.boolean().optional().describe("Turn the light on or off right now."),

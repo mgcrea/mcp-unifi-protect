@@ -174,9 +174,11 @@ export const registerCameraTools = (
     "unifi_protect_update_camera",
     {
       description:
-        "Change a camera's settings in place. Only the fields you pass are sent; everything " +
-        "else is left as it is. Use unifi_protect_set_camera_recording_mode for recording mode " +
-        "alone — it is the setting people mean most often and it is easy to send wrongly here.",
+        "Change a camera's settings in place. Only the fields you pass are sent, and the " +
+        "console merges them — sibling settings inside the same block are preserved, so " +
+        "setting osdDate alone does not clear osdName. Use " +
+        "unifi_protect_set_camera_recording_mode for recording mode alone — it is the setting " +
+        "people mean most often and it is easy to send wrongly here.",
       inputSchema: {
         cameraId: cameraIdArg,
         name: z.string().min(1).optional().describe("Display name shown throughout Protect."),
@@ -188,35 +190,33 @@ export const registerCameraTools = (
           .optional()
           .describe("Microphone sensitivity, 0-100. 0 mutes the microphone."),
         isMicEnabled: z.boolean().optional().describe("Whether the microphone records at all."),
-        ledLevel: z
-          .number()
-          .int()
-          .min(0)
-          .max(6)
+        // A camera's LED is a simple on/off (`ledSettings.isEnabled`). The
+        // 0-6 `ledLevel` that looks like it belongs here is a FLOODLIGHT
+        // field — see unifi_protect_update_light.
+        statusLedEnabled: z
+          .boolean()
           .optional()
-          .describe("Status LED brightness, 0 (off) to 6."),
-        isLedForced: z.boolean().optional().describe("Keep the status LED on regardless of state."),
+          .describe("Whether the camera's status LED lights up at all."),
         osdName: z.boolean().optional().describe("Overlay the camera name on the video."),
         osdDate: z.boolean().optional().describe("Overlay the date and time on the video."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
-    async ({ cameraId, name, micVolume, isMicEnabled, ledLevel, isLedForced, osdName, osdDate }) =>
+    async ({ cameraId, name, micVolume, isMicEnabled, statusLedEnabled, osdName, osdDate }) =>
       wrap(async () => {
-        const ledSettings = compactOrUndefined({ isLedForced });
+        const ledSettings = compactOrUndefined({ isEnabled: statusLedEnabled });
         const osdSettings = compactOrUndefined({ isNameEnabled: osdName, isDateEnabled: osdDate });
         const body = compactOrUndefined({
           name,
           micVolume,
           isMicEnabled,
-          ledLevel,
           ledSettings,
           osdSettings,
         });
         if (!body) {
           throw new Error(
-            "Nothing to update — pass at least one of name, micVolume, isMicEnabled, ledLevel, " +
-              "isLedForced, osdName, osdDate.",
+            "Nothing to update — pass at least one of name, micVolume, isMicEnabled, " +
+              "statusLedEnabled, osdName, osdDate.",
           );
         }
         return summarizeCamera(
