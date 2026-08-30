@@ -1,10 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { cameraFacts } from "./client/detection.js";
-import { availableLocations } from "./client/locations.js";
-import type { ProtectClient } from "./client/protect.js";
-import { summarizeNvr } from "./client/shape.js";
-import type { Config } from "./config.js";
+import { cameraFacts } from "#/client/detection";
+import { availableLocations } from "#/client/locations";
+import type { ProtectClient } from "#/client/protect";
+import { summarizeNvr } from "#/client/shape";
+import type { Config } from "#/config";
 
 type Rec = Record<string, unknown>;
 

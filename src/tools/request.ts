@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { WritesDisabledError } from "../client/errors.js";
-import type { ProtectClient } from "../client/protect.js";
-import { wrap } from "./util.js";
+import { WritesDisabledError } from "#/client/errors";
+import type { ProtectClient } from "#/client/protect";
+import { wrap } from "#/tools/util";
 
 /**
  * Reject anything that is not a plain relative path. The server decides the

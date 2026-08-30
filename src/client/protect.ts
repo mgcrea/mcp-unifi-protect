@@ -1,6 +1,6 @@
-import { PRIVATE_API_PATH } from "../config.js";
-import type { Logger, SessionProvider } from "./auth.js";
-import { ProtectApiError } from "./errors.js";
+import type { Logger, SessionProvider } from "#/client/auth";
+import { ProtectApiError } from "#/client/errors";
+import { PRIVATE_API_PATH } from "#/config";
 
 /** Array values become repeated params, which is how Protect expects `types`. */
 export type Query = Record<string, string | number | boolean | string[] | undefined>;

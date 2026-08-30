@@ -1,19 +1,19 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { BUILD_INFO } from "./build-info.js";
+import { BUILD_INFO } from "#/build-info";
 import {
   apiKeySessionProvider,
   createSessionProvider,
   type Logger,
   type SessionProvider,
-} from "./client/auth.js";
-import { createDeviceCache, type DeviceCache } from "./client/device-cache.js";
-import { ProtectClient } from "./client/protect.js";
-import { createHttpFetch } from "./client/tls.js";
-import { consoleOrigin, isConfigured, type Config } from "./config.js";
-import { registerPrompts } from "./prompts.js";
-import { registerResources } from "./resources.js";
-import { registerTools } from "./tools/index.js";
+} from "#/client/auth";
+import { createDeviceCache, type DeviceCache } from "#/client/device-cache";
+import { ProtectClient } from "#/client/protect";
+import { createHttpFetch } from "#/client/tls";
+import { consoleOrigin, isConfigured, type Config } from "#/config";
+import { registerPrompts } from "#/prompts";
+import { registerResources } from "#/resources";
+import { registerTools } from "#/tools/index";
 
 export const SERVER_NAME = BUILD_INFO.name;
 export const SERVER_VERSION = BUILD_INFO.version;

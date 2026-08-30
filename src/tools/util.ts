@@ -5,7 +5,7 @@ import {
   ProtectApiError,
   ProtectAuthError,
   WritesDisabledError,
-} from "../client/errors.js";
+} from "#/client/errors";
 
 export type ToolResult = {
   content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
@@ -309,4 +309,4 @@ export const limitArg = z
       "of motion events a day, so raise this deliberately.",
   );
 
-export { localTime } from "../client/shape.js";
+export { localTime } from "#/client/shape";

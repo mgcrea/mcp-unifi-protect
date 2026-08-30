@@ -2,9 +2,9 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ZodError } from "zod";
 
-import { BUILD_INFO } from "./build-info.js";
-import { isConfigured, loadConfig, setupInstructions } from "./config.js";
-import { createServer } from "./server.js";
+import { BUILD_INFO } from "#/build-info";
+import { isConfigured, loadConfig, setupInstructions } from "#/config";
+import { createServer } from "#/server";
 
 // Everything goes to stderr: stdout is the MCP protocol channel, and a stray
 // log line there corrupts the JSON-RPC stream — usually failing the client's

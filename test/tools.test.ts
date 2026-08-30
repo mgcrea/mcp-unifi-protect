@@ -2,9 +2,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { staticSessionProvider } from "../src/client/auth.js";
-import type { Config } from "../src/config.js";
-import { createServer } from "../src/server.js";
+import { staticSessionProvider } from "#/client/auth";
+import type { Config } from "#/config";
+import { createServer } from "#/server";
+
 import { calledInit, calledUrl, fetchMock } from "./helpers.js";
 
 /** A camera whose zone asks for person while the device list blocks it. */

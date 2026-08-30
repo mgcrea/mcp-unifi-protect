@@ -1,6 +1,6 @@
 import { Agent, fetch as undiciFetch } from "undici";
 
-import type { Logger } from "./auth.js";
+import type { Logger } from "#/client/auth";
 
 /**
  * The one place TLS is decided.

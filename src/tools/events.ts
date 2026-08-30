@@ -4,11 +4,11 @@ import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { detectionWarnings } from "../client/detection.js";
-import { resolveLocation } from "../client/locations.js";
-import type { ProtectClient } from "../client/protect.js";
-import { summarizeEvent } from "../client/shape.js";
-import type { ToolContext } from "./index.js";
+import { detectionWarnings } from "#/client/detection";
+import { resolveLocation } from "#/client/locations";
+import type { ProtectClient } from "#/client/protect";
+import { summarizeEvent } from "#/client/shape";
+import type { ToolContext } from "#/tools/index";
 import {
   cameraIdArg,
   limitArg,
@@ -21,7 +21,7 @@ import {
   type ToolResult,
   wrap,
   wrapResult,
-} from "./util.js";
+} from "#/tools/util";
 
 type Rec = Record<string, unknown>;
 

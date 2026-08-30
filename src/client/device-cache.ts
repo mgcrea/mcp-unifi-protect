@@ -1,6 +1,6 @@
-import { buildCameraIndex, type CameraFacts, type CameraIndex } from "./detection.js";
-import type { ProtectClient } from "./protect.js";
-import type { NameIndex } from "./shape.js";
+import { buildCameraIndex, type CameraFacts, type CameraIndex } from "#/client/detection";
+import type { ProtectClient } from "#/client/protect";
+import type { NameIndex } from "#/client/shape";
 
 export type DeviceCacheOptions = {
   client: ProtectClient;

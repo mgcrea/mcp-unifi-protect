@@ -3,10 +3,10 @@ import { statSync } from "node:fs";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import type { ProtectClient } from "../client/protect.js";
-import { isConfigured, setupInstructions } from "../config.js";
-import type { ToolContext } from "./index.js";
-import { confirmArg, wrap } from "./util.js";
+import type { ProtectClient } from "#/client/protect";
+import { isConfigured, setupInstructions } from "#/config";
+import type { ToolContext } from "#/tools/index";
+import { confirmArg, wrap } from "#/tools/util";
 
 const fileMode = (path: string): number | undefined => {
   try {

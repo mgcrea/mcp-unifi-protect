@@ -4,11 +4,11 @@ import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { cameraFacts, GATED_OBJECT_TYPES } from "../client/detection.js";
-import type { ProtectClient } from "../client/protect.js";
-import { summarizeCamera, summarizeEach } from "../client/shape.js";
-import type { ToolContext } from "./index.js";
-import { cameraIdArg, compactOrUndefined, confirmArg, ok, wrap, wrapResult } from "./util.js";
+import { cameraFacts, GATED_OBJECT_TYPES } from "#/client/detection";
+import type { ProtectClient } from "#/client/protect";
+import { summarizeCamera, summarizeEach } from "#/client/shape";
+import type { ToolContext } from "#/tools/index";
+import { cameraIdArg, compactOrUndefined, confirmArg, ok, wrap, wrapResult } from "#/tools/util";
 
 type Rec = Record<string, unknown>;
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCameraIndex, cameraFacts, detectionWarnings } from "../src/client/detection.js";
-import { resolveLocation } from "../src/client/locations.js";
-import { auditCameras } from "../src/tools/audit.js";
+import { buildCameraIndex, cameraFacts, detectionWarnings } from "#/client/detection";
+import { resolveLocation } from "#/client/locations";
+import { auditCameras } from "#/tools/audit";
 
 /** The real shape, trimmed: a doorbell whose zone asks for more than the device allows. */
 const carillon = {

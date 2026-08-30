@@ -1,4 +1,4 @@
-import type { CameraIndex } from "./detection.js";
+import type { CameraIndex } from "#/client/detection";
 
 /**
  * Turn a place name into camera ids.

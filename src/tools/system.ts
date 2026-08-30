@@ -1,15 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import type { ProtectClient } from "../client/protect.js";
+import type { ProtectClient } from "#/client/protect";
 import {
   summarizeBootstrap,
   summarizeEach,
   summarizeLiveview,
   summarizeUser,
-} from "../client/shape.js";
-import type { ToolContext } from "./index.js";
-import { compactOrUndefined, confirmArg, wrap } from "./util.js";
+} from "#/client/shape";
+import type { ToolContext } from "#/tools/index";
+import { compactOrUndefined, confirmArg, wrap } from "#/tools/util";
 
 type Rec = Record<string, unknown>;
 

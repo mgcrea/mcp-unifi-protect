@@ -6,8 +6,8 @@ import {
   loadConfig,
   normalizeBaseUrl,
   setupInstructions,
-} from "../src/config.js";
-import { localTime, toEpochMs } from "../src/tools/util.js";
+} from "#/config";
+import { localTime, toEpochMs } from "#/tools/util";
 
 const NO_FILE = "/nonexistent/unifi-protect-config.json";
 

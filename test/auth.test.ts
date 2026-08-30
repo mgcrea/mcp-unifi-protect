@@ -4,9 +4,10 @@ import { join } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createSessionProvider } from "../src/client/auth.js";
-import { ProtectAuthError } from "../src/client/errors.js";
-import type { Config } from "../src/config.js";
+import { createSessionProvider } from "#/client/auth";
+import { ProtectAuthError } from "#/client/errors";
+import type { Config } from "#/config";
+
 import { calledInit, calledUrl, fetchMock, type FetchLike } from "./helpers.js";
 
 let sessionFile: string;

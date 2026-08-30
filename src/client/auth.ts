@@ -1,6 +1,11 @@
-import { LOGIN_PATH, type Config } from "../config.js";
-import { ProtectAuthError } from "./errors.js";
-import { clearSession, loadSession, saveSession, type PersistedSession } from "./session-store.js";
+import { ProtectAuthError } from "#/client/errors";
+import {
+  clearSession,
+  loadSession,
+  saveSession,
+  type PersistedSession,
+} from "#/client/session-store";
+import { LOGIN_PATH, type Config } from "#/config";
 
 export type Logger = {
   debug?(...args: unknown[]): void;

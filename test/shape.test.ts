@@ -8,7 +8,7 @@ import {
   summarizeEvent,
   summarizeNvr,
   summarizeSensor,
-} from "../src/client/shape.js";
+} from "#/client/shape";
 
 describe("isoTime", () => {
   it("renders a millisecond epoch as ISO 8601", () => {

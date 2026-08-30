@@ -1,16 +1,16 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import type { SessionProvider } from "../client/auth.js";
-import type { DeviceCache } from "../client/device-cache.js";
-import type { ProtectClient } from "../client/protect.js";
-import { isConfigured, type Config } from "../config.js";
-import { registerAuditTools } from "./audit.js";
-import { registerCameraTools } from "./cameras.js";
-import { registerDeviceTools } from "./devices.js";
-import { registerEventTools } from "./events.js";
-import { registerRequestTool } from "./request.js";
-import { registerStatusTools } from "./status.js";
-import { registerSystemTools } from "./system.js";
+import type { SessionProvider } from "#/client/auth";
+import type { DeviceCache } from "#/client/device-cache";
+import type { ProtectClient } from "#/client/protect";
+import { isConfigured, type Config } from "#/config";
+import { registerAuditTools } from "#/tools/audit";
+import { registerCameraTools } from "#/tools/cameras";
+import { registerDeviceTools } from "#/tools/devices";
+import { registerEventTools } from "#/tools/events";
+import { registerRequestTool } from "#/tools/request";
+import { registerStatusTools } from "#/tools/status";
+import { registerSystemTools } from "#/tools/system";
 
 export type ToolContext = {
   config: Config;

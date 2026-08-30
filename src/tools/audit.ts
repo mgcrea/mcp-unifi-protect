@@ -1,9 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { cameraFacts, type CameraFacts } from "../client/detection.js";
-import type { ProtectClient } from "../client/protect.js";
-import type { ToolContext } from "./index.js";
-import { wrap } from "./util.js";
+import { cameraFacts, type CameraFacts } from "#/client/detection";
+import type { ProtectClient } from "#/client/protect";
+import type { ToolContext } from "#/tools/index";
+import { wrap } from "#/tools/util";
 
 type Rec = Record<string, unknown>;
 

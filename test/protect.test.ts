@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { staticSessionProvider, type SessionProvider } from "../src/client/auth.js";
-import { ProtectApiError } from "../src/client/errors.js";
-import { buildQuery, ProtectClient } from "../src/client/protect.js";
+import { staticSessionProvider, type SessionProvider } from "#/client/auth";
+import { ProtectApiError } from "#/client/errors";
+import { buildQuery, ProtectClient } from "#/client/protect";
+
 import { calledInit, calledUrl, fetchMock, type FetchLike } from "./helpers.js";
 
 const json = (body: unknown, status = 200): Response =>

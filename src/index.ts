@@ -5,7 +5,7 @@ export {
   USER_AGENT,
   type CreatedServer,
   type CreateServerOptions,
-} from "./server.js";
+} from "#/server";
 export {
   expandTilde,
   isConfigured,
@@ -19,7 +19,7 @@ export {
   UPDATES_WS_PATH,
   type Config,
   type FileConfig,
-} from "./config.js";
+} from "#/config";
 export {
   createSessionProvider,
   staticSessionProvider,
@@ -27,14 +27,14 @@ export {
   type SessionHeaders,
   type SessionProvider,
   type SessionStatus,
-} from "./client/auth.js";
+} from "#/client/auth";
 export {
   clearSession,
   loadSession,
   saveSession,
   type PersistedSession,
-} from "./client/session-store.js";
-export { createDeviceCache, type DeviceCache } from "./client/device-cache.js";
+} from "#/client/session-store";
+export { createDeviceCache, type DeviceCache } from "#/client/device-cache";
 export {
   backoffMs,
   buildQuery,
@@ -43,13 +43,13 @@ export {
   type BinaryResult,
   type ProtectClientOptions,
   type Query,
-} from "./client/protect.js";
+} from "#/client/protect";
 export {
   NotConfiguredError,
   ProtectApiError,
   ProtectAuthError,
   WritesDisabledError,
-} from "./client/errors.js";
+} from "#/client/errors";
 export {
   buildNameIndex,
   isoTime,
@@ -65,7 +65,7 @@ export {
   summarizeUser,
   summarizeViewer,
   type NameIndex,
-} from "./client/shape.js";
-export { registerTools, type ToolContext } from "./tools/index.js";
-export { assertSafePath } from "./tools/request.js";
-export { toEpochMs } from "./tools/util.js";
+} from "#/client/shape";
+export { registerTools, type ToolContext } from "#/tools/index";
+export { assertSafePath } from "#/tools/request";
+export { toEpochMs } from "#/tools/util";
