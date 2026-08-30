@@ -113,6 +113,23 @@ const ConfigSchema = z
     /** How long a cached camera id→name index stays fresh, in seconds. */
     deviceCacheTtlSeconds: z.number().int().nonnegative().max(3600).default(60),
     /**
+     * IANA zone for interpreting and rendering local times. Left undefined the
+     * console's own `nvr.timezone` is used, which is nearly always what someone
+     * asking about "1am" means. Set this only to override a console whose zone
+     * is wrong.
+     */
+    timeZone: z.string().min(1).optional(),
+    /**
+     * Names for groups of cameras, so "the front of the house" resolves without
+     * anyone having to know which ids that covers.
+     *
+     * The console has no concept of this — it knows names, not places — and the
+     * mapping is genuinely local knowledge: `Portail` and `Jardin` are both
+     * outdoors, but only one faces the street. Values may be camera names or
+     * ids; names are matched case-insensitively.
+     */
+    locations: z.record(z.string(), z.array(z.string())).default({}),
+    /**
      * Configuration problems that are worth saying out loud but must never stop
      * the server. Reported by unifi_protect_auth_status and the startup banner.
      */
@@ -159,6 +176,8 @@ const FileConfigSchema = z
     maxRetries: z.number().int().nonnegative().max(10).optional(),
     maxDownloadBytes: z.number().int().positive().optional(),
     deviceCacheTtlSeconds: z.number().int().nonnegative().max(3600).optional(),
+    timeZone: z.string().min(1).optional(),
+    locations: z.record(z.string(), z.array(z.string())).optional(),
   })
   .strict();
 
@@ -328,6 +347,8 @@ export const loadConfig = (
     join(homedir(), ".cache", "unifi-protect");
 
   const issues: string[] = [];
+  const { locations, issue: locationsIssue } = parseLocations(env.UNIFI_PROTECT_LOCATIONS);
+  if (locationsIssue) issues.push(locationsIssue);
   const apiKey = trimmed(env.UNIFI_PROTECT_API_KEY) ?? file.apiKey;
   const consoleId = trimmed(env.UNIFI_PROTECT_CONSOLE_ID) ?? file.consoleId;
   const username = trimmed(env.UNIFI_PROTECT_USERNAME) ?? file.username;
@@ -394,7 +415,36 @@ export const loadConfig = (
     maxDownloadBytes: parseIntOpt(env.UNIFI_PROTECT_MAX_DOWNLOAD_BYTES) ?? file.maxDownloadBytes,
     deviceCacheTtlSeconds:
       parseIntOpt(env.UNIFI_PROTECT_DEVICE_CACHE_TTL) ?? file.deviceCacheTtlSeconds,
+    timeZone: trimmed(env.UNIFI_PROTECT_TIMEZONE) ?? file.timeZone,
+    locations: locations ?? file.locations,
   });
+};
+
+/**
+ * Read the location map from the environment, where it has to arrive as JSON.
+ *
+ * A malformed value must never stop the server (rule 2): it collects into
+ * `issues` and the map is simply empty, so every camera stays reachable by id.
+ */
+const parseLocations = (
+  raw: string | undefined,
+): { locations?: Record<string, string[]>; issue?: string } => {
+  const text = trimmed(raw);
+  if (!text) return {};
+  try {
+    const parsed: unknown = JSON.parse(text);
+    const result = z.record(z.string(), z.array(z.string())).safeParse(parsed);
+    if (!result.success) {
+      return {
+        issue:
+          "UNIFI_PROTECT_LOCATIONS must be a JSON object of name -> array of camera names, e.g. " +
+          '{"front":["Carillon","Portail"]}. It was ignored.',
+      };
+    }
+    return { locations: result.data };
+  } catch {
+    return { issue: "UNIFI_PROTECT_LOCATIONS is not valid JSON. It was ignored." };
+  }
 };
 
 /**
