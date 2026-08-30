@@ -32,6 +32,31 @@ export const isoTime = (value: unknown): string | undefined => {
   return new Date(value).toISOString();
 };
 
+/**
+ * Render an instant as wall-clock time in the console's zone.
+ *
+ * Every timestamp this server returns is ISO 8601 in UTC, which is unambiguous
+ * but is not the time anyone asked about. "Between 1am and 6am" is a question
+ * about the console's local clock, so the local rendering travels alongside.
+ */
+export const localTime = (ms: number, timeZone: string | undefined): string | undefined => {
+  if (!timeZone || !Number.isFinite(ms)) return undefined;
+  try {
+    return new Intl.DateTimeFormat("sv-SE", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date(ms));
+  } catch {
+    // An unknown zone must not take down a search.
+    return undefined;
+  }
+};
+
 /** An index from device id to display name, used to resolve event references. */
 export type NameIndex = ReadonlyMap<string, string>;
 
@@ -80,7 +105,7 @@ export const summarizeCamera = (camera: Rec): Rec => {
  * would otherwise have to perform against a separate camera list, and get
  * silently wrong. The id is kept too, since the write and snapshot tools need it.
  */
-export const summarizeEvent = (event: Rec, cameras?: NameIndex): Rec => {
+export const summarizeEvent = (event: Rec, cameras?: NameIndex, timeZone?: string): Rec => {
   const cameraId = str(event.camera);
   const metadata = isRecord(event.metadata) ? event.metadata : undefined;
   const plate =
@@ -91,6 +116,12 @@ export const summarizeEvent = (event: Rec, cameras?: NameIndex): Rec => {
     type: event.type,
     start: isoTime(event.start),
     end: isoTime(event.end),
+    // The local clock alongside UTC. "Was anyone there at 2am" is a question
+    // about the console's wall clock, and making the reader do the offset
+    // arithmetic is where an hour goes missing.
+    ...(timeZone && typeof event.start === "number"
+      ? { localStart: localTime(event.start, timeZone) }
+      : {}),
     ...(cameraId ? { cameraId } : {}),
     ...(cameraId && cameras?.get(cameraId) ? { camera: cameras.get(cameraId) } : {}),
     ...(Array.isArray(event.smartDetectTypes) && event.smartDetectTypes.length > 0

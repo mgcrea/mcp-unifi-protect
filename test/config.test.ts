@@ -7,7 +7,7 @@ import {
   normalizeBaseUrl,
   setupInstructions,
 } from "../src/config.js";
-import { toEpochMs } from "../src/tools/util.js";
+import { localTime, toEpochMs } from "../src/tools/util.js";
 
 const NO_FILE = "/nonexistent/unifi-protect-config.json";
 
@@ -227,5 +227,64 @@ describe("modes", () => {
     const text = setupInstructions(loadConfig({ UNIFI_PROTECT_MODE: "cloud" }, NONE)).join(" ");
     expect(text).toMatch(/organization/i);
     expect(text).toMatch(/api\.ui\.com\/v1\/hosts/);
+  });
+});
+
+describe("toEpochMs in the console's time zone", () => {
+  const TZ = "Europe/Paris";
+  // 12:04 Paris on 2026-08-30 (CEST, UTC+2).
+  const now = Date.parse("2026-08-30T10:04:00Z");
+
+  it('reads "1am" as the console\'s local clock, not UTC', () => {
+    // The failure this prevents: interpreting 1am as UTC searches 03:00 local
+    // and quietly returns a different hour's footage.
+    expect(new Date(toEpochMs("1am", { now, timeZone: TZ })).toISOString()).toBe(
+      "2026-08-29T23:00:00.000Z",
+    );
+  });
+
+  it("resolves a bare time of day to the most recent occurrence, not tomorrow", () => {
+    const ms = toEpochMs("6am", { now, timeZone: TZ });
+    expect(localTime(ms, TZ)).toBe("2026-08-30 06:00:00");
+    expect(ms).toBeLessThan(now);
+  });
+
+  it("keeps a start/end pair on one night when anchored to the end", () => {
+    // Asked at 03:00 Paris, "1am to 6am" must not invert: the end resolves to
+    // yesterday morning, and the start anchors to it rather than to now.
+    const at3am = Date.parse("2026-08-30T01:00:00Z");
+    const end = toEpochMs("6am", { now: at3am, timeZone: TZ });
+    const start = toEpochMs("1am", { now: at3am, timeZone: TZ, before: end });
+    expect(start).toBeLessThan(end);
+    expect(localTime(start, TZ)).toBe("2026-08-29 01:00:00");
+    expect(localTime(end, TZ)).toBe("2026-08-29 06:00:00");
+  });
+
+  it("reads a naive date-time in the console's zone", () => {
+    expect(new Date(toEpochMs("2026-08-30 01:39", { now, timeZone: TZ })).toISOString()).toBe(
+      "2026-08-29T23:39:00.000Z",
+    );
+  });
+
+  it("handles a winter date, where the offset differs", () => {
+    // CET (UTC+1) rather than CEST — a fixed offset would be an hour out.
+    expect(new Date(toEpochMs("2026-01-15 01:00", { now, timeZone: TZ })).toISOString()).toBe(
+      "2026-01-15T00:00:00.000Z",
+    );
+  });
+
+  it("still accepts ISO and relative forms unchanged", () => {
+    expect(toEpochMs("2026-08-29T10:00:00.000Z", { now, timeZone: TZ })).toBe(
+      Date.parse("2026-08-29T10:00:00Z"),
+    );
+    expect(toEpochMs("2h ago", { now, timeZone: TZ })).toBe(now - 7_200_000);
+  });
+
+  it("says local forms need a zone when none is available", () => {
+    expect(() => toEpochMs("1am", { now })).toThrow(/time zone/);
+  });
+
+  it("keeps the old positional now argument working", () => {
+    expect(toEpochMs("2h ago", now)).toBe(now - 7_200_000);
   });
 });
