@@ -29,6 +29,7 @@ export const registerCameraTools = (
   server.registerTool(
     "unifi_protect_list_cameras",
     {
+      title: "UniFi Protect: List Cameras",
       description:
         "List every camera on the console with its id, name, connection state, recording mode, " +
         "firmware and what it can do (PTZ, package camera, smart detection, and which object " +
@@ -44,6 +45,7 @@ export const registerCameraTools = (
   server.registerTool(
     "unifi_protect_get_camera",
     {
+      title: "UniFi Protect: Get Camera",
       description:
         "Get one camera's complete record — every setting the console holds, including encoder " +
         "channels, motion and smart-detection zones, privacy masks, OSD and LED settings, ISP " +
@@ -58,6 +60,7 @@ export const registerCameraTools = (
   server.registerTool(
     "unifi_protect_get_camera_snapshot",
     {
+      title: "UniFi Protect: Get Camera Snapshot",
       description:
         "Capture a still frame from a camera as it looks right now. Writes the JPEG to disk and " +
         'returns its path, size and content type by default. Set output="image" to get the ' +
@@ -142,6 +145,7 @@ export const registerCameraTools = (
   server.registerTool(
     "unifi_protect_list_ptz_presets",
     {
+      title: "UniFi Protect: List PTZ Presets",
       description:
         "List a PTZ camera's saved preset positions, with the slot number each one lives at. " +
         "Only meaningful for cameras reporting hasPtz: true in unifi_protect_list_cameras. " +
@@ -159,6 +163,7 @@ export const registerCameraTools = (
   server.registerTool(
     "unifi_protect_list_ptz_patrols",
     {
+      title: "UniFi Protect: List PTZ Patrols",
       description:
         "List a PTZ camera's saved patrol routes. See unifi_protect_list_ptz_presets for why " +
         "there is no tool to start or stop one.",
@@ -174,6 +179,7 @@ export const registerCameraTools = (
   server.registerTool(
     "unifi_protect_update_camera",
     {
+      title: "UniFi Protect: Update Camera",
       description:
         "Change a camera's settings in place. Only the fields you pass are sent, and the " +
         "console merges them — sibling settings inside the same block are preserved, so " +
@@ -229,6 +235,7 @@ export const registerCameraTools = (
   server.registerTool(
     "unifi_protect_set_camera_detections",
     {
+      title: "UniFi Protect: Set Camera Detections",
       description:
         "Turn a camera's smart detections on or off — which objects it looks for (person, " +
         "vehicle, animal, package) and which sounds it listens for. THIS is the setting that " +
@@ -352,6 +359,7 @@ export const registerCameraTools = (
   server.registerTool(
     "unifi_protect_set_camera_recording_mode",
     {
+      title: "UniFi Protect: Set Camera Recording Mode",
       description:
         "Set what a camera records. `never` stops recording entirely — the camera stays online " +
         "and streams live, but nothing is written, so there will be no footage to search later. " +
@@ -381,6 +389,7 @@ export const registerCameraTools = (
   server.registerTool(
     "unifi_protect_reboot_camera",
     {
+      title: "UniFi Protect: Reboot Camera",
       description:
         "Reboot a camera. It stops recording and goes offline for roughly a minute, and any " +
         "footage during that window is lost. Useful for a camera that has stopped responding.",

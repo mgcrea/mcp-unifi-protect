@@ -25,6 +25,7 @@ export const registerDeviceTools = (
   server.registerTool(
     "unifi_protect_list_lights",
     {
+      title: "UniFi Protect: List Lights",
       description:
         "List UniFi Protect floodlights with their connection state, whether the light is " +
         "currently on, whether PIR motion is being detected, and brightness.",
@@ -37,6 +38,7 @@ export const registerDeviceTools = (
   server.registerTool(
     "unifi_protect_list_sensors",
     {
+      title: "UniFi Protect: List Sensors",
       description:
         "List UniFi Protect sensors with their current readings — temperature, humidity, light " +
         "level — plus open/closed state, motion, and battery percentage. The readings are " +
@@ -51,6 +53,7 @@ export const registerDeviceTools = (
   server.registerTool(
     "unifi_protect_list_viewers",
     {
+      title: "UniFi Protect: List Viewers",
       description:
         "List UniFi Protect Viewport devices and which live view each is currently displaying.",
       inputSchema: {},
@@ -62,6 +65,7 @@ export const registerDeviceTools = (
   server.registerTool(
     "unifi_protect_list_chimes",
     {
+      title: "UniFi Protect: List Chimes",
       description:
         "List UniFi Protect chimes, their volume, and which doorbell cameras each is paired to.",
       inputSchema: {},
@@ -75,6 +79,7 @@ export const registerDeviceTools = (
   server.registerTool(
     "unifi_protect_update_light",
     {
+      title: "UniFi Protect: Update Light",
       description:
         "Change a floodlight's settings — brightness, whether the light is on, and the PIR " +
         "sensitivity that decides when it triggers. Only the fields you pass are sent, and the " +
@@ -118,6 +123,7 @@ export const registerDeviceTools = (
   server.registerTool(
     "unifi_protect_update_sensor",
     {
+      title: "UniFi Protect: Update Sensor",
       description:
         "Rename a sensor or change which of its capabilities are enabled. Only the fields you " +
         "pass are sent.",
@@ -155,6 +161,7 @@ export const registerDeviceTools = (
   server.registerTool(
     "unifi_protect_update_viewer",
     {
+      title: "UniFi Protect: Update Viewer",
       description:
         "Put a saved live view on a Viewport screen, or rename the viewer. The liveview id " +
         "comes from unifi_protect_list_liveviews — this changes what is displayed on a physical " +
@@ -183,6 +190,7 @@ export const registerDeviceTools = (
   server.registerTool(
     "unifi_protect_update_chime",
     {
+      title: "UniFi Protect: Update Chime",
       description:
         "Change a chime's volume or rename it. Volume 0 silences it, so a doorbell press will " +
         "make no sound.",

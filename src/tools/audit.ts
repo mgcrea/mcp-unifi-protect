@@ -177,6 +177,7 @@ export const registerAuditTools = (
   server.registerTool(
     "unifi_protect_check_settings",
     {
+      title: "UniFi Protect: Check Settings",
       description:
         "Check every camera and the console for settings that are inconsistent, or that mean " +
         "the system is not doing what someone believes it is. Finds detectors that look " +

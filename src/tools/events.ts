@@ -83,6 +83,7 @@ export const registerEventTools = (
   server.registerTool(
     "unifi_protect_list_events",
     {
+      title: "UniFi Protect: List Events",
       description:
         "Search recorded events over any time range — motion, smart detections (person, " +
         "vehicle, animal, package, licence plate), doorbell rings, and camera connection " +
@@ -272,6 +273,7 @@ export const registerEventTools = (
   server.registerTool(
     "unifi_protect_get_event",
     {
+      title: "UniFi Protect: Get Event",
       description:
         "Get one event's full record, including detection metadata the search results leave " +
         "out — per-object tracking, detected zones, licence plate text and vehicle attributes " +
@@ -287,6 +289,7 @@ export const registerEventTools = (
   server.registerTool(
     "unifi_protect_get_event_thumbnail",
     {
+      title: "UniFi Protect: Get Event Thumbnail",
       description:
         "Fetch the still image Protect captured for an event — the frame that triggered the " +
         'detection. Writes it to disk and returns the path by default; set output="image" to ' +
@@ -350,6 +353,7 @@ export const registerEventTools = (
   server.registerTool(
     "unifi_protect_get_event_thumbnails",
     {
+      title: "UniFi Protect: Get Event Thumbnails",
       description:
         "Fetch the still frames for SEVERAL events at once and return them inline to look at. " +
         "This is the tool for answering who or what was actually there, and it matters most " +
@@ -431,6 +435,7 @@ export const registerEventTools = (
   server.registerTool(
     "unifi_protect_export_video",
     {
+      title: "UniFi Protect: Export Video",
       description:
         "Export recorded footage from one camera over a time range as an MP4 file on disk. " +
         "Always writes to a file and returns the path — video is never returned inline. Size " +

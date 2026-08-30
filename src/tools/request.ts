@@ -29,6 +29,7 @@ export const registerRequestTool = (
   server.registerTool(
     "unifi_protect_request",
     {
+      title: "UniFi Protect: Request",
       description:
         "Escape hatch: call any private Protect API endpoint directly, relative to " +
         "/proxy/protect/api. This exists because the private API is undocumented and Ubiquiti " +

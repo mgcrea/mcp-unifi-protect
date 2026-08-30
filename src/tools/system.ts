@@ -21,6 +21,7 @@ export const registerSystemTools = (
   server.registerTool(
     "unifi_protect_get_system_info",
     {
+      title: "UniFi Protect: Get System Info",
       description:
         "Overview of the console: model, Protect version, firmware, timezone, uptime, storage " +
         "use and how many devices of each type are adopted. Worth calling first on an unfamiliar " +
@@ -36,6 +37,7 @@ export const registerSystemTools = (
   server.registerTool(
     "unifi_protect_list_users",
     {
+      title: "UniFi Protect: List Users",
       description:
         "List the accounts that can sign in to Protect, with their role and last login. Useful " +
         "for auditing who has access to the cameras.",
@@ -48,6 +50,7 @@ export const registerSystemTools = (
   server.registerTool(
     "unifi_protect_list_liveviews",
     {
+      title: "UniFi Protect: List Liveviews",
       description:
         "List the saved live views — the named camera grid layouts shown on viewers and in the " +
         "Protect app. The returned id is what unifi_protect_update_viewer needs to put a layout " +
@@ -63,6 +66,7 @@ export const registerSystemTools = (
   server.registerTool(
     "unifi_protect_update_nvr_settings",
     {
+      title: "UniFi Protect: Update NVR Settings",
       description:
         "Change console-wide settings. `isRecordingDisabled` is the significant one: turning it " +
         "on stops recording on EVERY camera at once, so nothing is written until it is turned " +
@@ -98,6 +102,7 @@ export const registerSystemTools = (
   server.registerTool(
     "unifi_protect_reboot_nvr",
     {
+      title: "UniFi Protect: Reboot NVR",
       description:
         "REBOOT THE CONSOLE. Every camera stops recording for the two to five minutes it takes " +
         "to come back, and footage from that window is lost permanently. This also drops the " +

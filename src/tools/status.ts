@@ -24,6 +24,7 @@ export const registerStatusTools = (
   server.registerTool(
     "unifi_protect_auth_status",
     {
+      title: "UniFi Protect: Auth Status",
       description:
         "Check whether this server can actually reach your UniFi Protect console. By default it " +
         "logs in and makes a real call, so the answer reflects the console rather than cached " +
@@ -156,6 +157,7 @@ export const registerStatusTools = (
   server.registerTool(
     "unifi_protect_auth_login",
     {
+      title: "UniFi Protect: Auth Login",
       description:
         "Force a fresh login to the console, replacing any cached session. Normally unnecessary " +
         "— the server logs in on demand and re-authenticates automatically on a 401. Use it to " +
@@ -187,6 +189,7 @@ export const registerStatusTools = (
   server.registerTool(
     "unifi_protect_auth_logout",
     {
+      title: "UniFi Protect: Auth Logout",
       description:
         "Drop the cached session and delete the session file. The next call logs in again from " +
         "the configured username and password, so this does not lock anything out — use it to " +
