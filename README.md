@@ -208,7 +208,7 @@ printf '%s\n' \
 
 ## Tools
 
-20 read tools, plus 9 more when writes are enabled.
+22 read tools, plus 10 more when writes are enabled.
 
 | Tool                                      | What it does                                                                                        | Writes                 |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------- |
@@ -221,9 +221,11 @@ printf '%s\n' \
 | `unifi_protect_get_camera_snapshot`       | Capture a frame now, to a file or inline                                                            | —                      |
 | `unifi_protect_list_ptz_presets`          | A PTZ camera's saved preset slots                                                                   | —                      |
 | `unifi_protect_list_ptz_patrols`          | A PTZ camera's saved patrol routes                                                                  | —                      |
+| `unifi_protect_check_settings`            | **Audit every camera for inconsistent or self-defeating settings**                                  | —                      |
 | `unifi_protect_list_events`               | **Search recorded events over any time range**                                                      | —                      |
 | `unifi_protect_get_event`                 | One event's full detection metadata                                                                 | —                      |
 | `unifi_protect_get_event_thumbnail`       | The frame that triggered a detection                                                                | —                      |
+| `unifi_protect_get_event_thumbnails`      | Up to 6 frames at once, inline — how you tell a person from a branch                                | —                      |
 | `unifi_protect_export_video`              | Export footage as an MP4 on disk                                                                    | —                      |
 | `unifi_protect_list_lights`               | Floodlights, with state and brightness                                                              | —                      |
 | `unifi_protect_list_sensors`              | Sensors, with temperature / humidity / light readings                                               | —                      |
@@ -233,6 +235,7 @@ printf '%s\n' \
 | `unifi_protect_list_users`                | Who can sign in to Protect                                                                          | —                      |
 | `unifi_protect_request`                   | Escape hatch: call any private endpoint directly                                                    | GET only unless writes |
 | `unifi_protect_update_camera`             | Name, mic, status LED, OSD overlays                                                                 | ✅                     |
+| `unifi_protect_set_camera_detections`     | Which objects and sounds a camera detects — the gate below                                          | ✅                     |
 | `unifi_protect_set_camera_recording_mode` | `always` / `never` / `detections` / `schedule`                                                      | ✅                     |
 | `unifi_protect_reboot_camera`             | Reboot one camera                                                                                   | ✅ confirm             |
 | `unifi_protect_update_light`              | Brightness, on/off, PIR sensitivity                                                                 | ✅                     |
@@ -241,6 +244,24 @@ printf '%s\n' \
 | `unifi_protect_update_chime`              | Volume, name                                                                                        | ✅                     |
 | `unifi_protect_update_nvr_settings`       | Console name, timezone, global recording                                                            | ✅                     |
 | `unifi_protect_reboot_nvr`                | Reboot the console                                                                                  | ✅ confirm             |
+
+## Resources and prompts
+
+Three resources carry the standing facts a question needs before a tool is chosen, so a client
+can attach them once instead of spending a call per question:
+
+| Resource                    | Why it exists                                                                            |
+| --------------------------- | ---------------------------------------------------------------------------------------- |
+| `unifi-protect://console`   | The console's **time zone**, so "1am" is read as the local clock rather than UTC         |
+| `unifi-protect://cameras`   | What each camera will **actually** detect, what its zones ask for, and where they differ |
+| `unifi-protect://locations` | Named groups of cameras, so a question about a _place_ resolves to ids                   |
+
+Two prompts carry the procedure, which is the part a tool list cannot express:
+
+- **`check_camera_settings`** — run the audit and interpret it, changing nothing. Several
+  findings have two valid opposite fixes, and which is right depends on what the camera is for.
+- **`who_passed`** — find who was present in a window, and **fall back to motion frames on any
+  camera whose detector is off** rather than reporting a zero count as an absence.
 
 ## Worked example: what happened at the front door last night
 
@@ -296,11 +317,45 @@ console, and both now handled in either form:
   results report `hasThumbnail: true` rather than an id, and `unifi_protect_get_event_thumbnail`
   takes the event's `id` (though it tolerates an `e-…` value too).
 
+**Smart detection is gated in two places, and only one of them is obvious.**
+`smartDetectSettings.objectTypes` on the device is the master switch;
+`smartDetectZones[].objectTypes` says what each zone asks for. A zone can ask for `person` while
+the device list omits it, and the console then reports nothing at all — no error, no warning,
+just an empty result forever. On the console this was built against, a doorbell had
+`zone: [person, vehicle, animal]` against `device: [animal]`, so a person search returned zero
+across seven days while people walked past nightly.
+
+Zero results are therefore never reported bare. `unifi_protect_list_events` cross-checks the
+requested detection types against each camera's device list and returns a `warnings` array
+saying the detector was off — the difference between "nobody was there" and "nothing was
+looking". `unifi_protect_check_settings` finds the same misconfiguration across the whole
+system, and `unifi_protect_set_camera_detections` fixes it, keeping the zones in step.
+
+One limit worth knowing: the check reflects the camera's setting **now**, so a historical search
+over a period when the detector was off but has since been enabled gets no warning.
+
+**Some settings are reported on read but refused on write.** `smartDetectSettings.audioTypes`
+comes back containing `smoke_cmonx`, and a PATCH containing it fails with
+`400 The smart detection feature is not enabled for: smoke_cmonx`. Any read-modify-write that
+echoes the list back therefore breaks. `unifi_protect_set_camera_detections` filters against
+`featureFlags.smartDetectAudioTypes` and reports what it dropped.
+
+**Camera filtering happens on the console, and the parameter must be repeated.** `/events`
+accepts `cameras=<id>`, repeated once per camera. A comma-separated list is accepted and
+silently matches nothing. This mattered more than it looks: filtering client-side instead
+fetches the newest `limit` events across _all_ cameras and discards the rest, so a quiet camera
+over a long window came back empty while reporting a successful search.
+
 **Times are milliseconds, and getting it wrong fails silently.** The console takes JavaScript
 millisecond timestamps. A Unix _seconds_ value is not rejected — it is read as a moment in 1970,
 so the query succeeds and returns an empty list, which reads as "nothing happened". Every time
 argument here accepts ISO 8601, a relative expression (`"2h ago"`, `"30m"`, `"7d"`) or `"now"`,
 and a ten-digit number is refused with the corrected value in the error.
+
+Local forms are also accepted — `"1am"`, `"01:30"`, `"2026-08-30 01:00"` — and read in the
+**console's own time zone**, because a question about last night is a question about the clock
+where the cameras are. A bare time of day resolves to its most recent occurrence, and `start`
+anchors to the window's end, so "1am to 6am" stays one coherent night however late it is asked.
 
 **Event search is always filtered by type.** Omitting `types` entirely triggers a pagination bug
 in Protect where the console ignores the window and returns the wrong slice. `unifi_protect_list_events`
