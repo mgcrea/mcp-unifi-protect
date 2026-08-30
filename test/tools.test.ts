@@ -564,6 +564,24 @@ describe("resources and prompts", () => {
     await expect(client.listResources()).rejects.toThrow();
   });
 
+  it("renders every prompt with NO arguments at all", async () => {
+    // A slash command is invoked with no arguments, and a required argument
+    // fails schema validation before the prompt is ever rendered — which kills
+    // the whole command rather than merely under-specifying it.
+    const client = await connect(baseConfig);
+    for (const { name } of (await client.listPrompts()).prompts) {
+      const prompt = await client.getPrompt({ name, arguments: {} });
+      expect(prompt.messages.length, name).toBeGreaterThan(0);
+    }
+  });
+
+  it("says which default window it used when none was given", async () => {
+    const client = await connect(baseConfig);
+    const prompt = await client.getPrompt({ name: "who_passed", arguments: {} });
+    const body = prompt.messages.map((m) => (m.content as { text: string }).text).join(" ");
+    expect(body).toContain("last 24 hours");
+  });
+
   it("tells who_passed to check the warnings before answering", async () => {
     const client = await connect(baseConfig);
     const prompt = await client.getPrompt({

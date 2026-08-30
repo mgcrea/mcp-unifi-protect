@@ -55,6 +55,12 @@ export const registerPrompts = (server: McpServer): void => {
       description:
         "Find out who or what was present at a place during a time window, falling back to " +
         "motion frames on cameras whose detectors are off.",
+      // EVERY argument is optional, deliberately. A slash command is invoked
+      // with no arguments in at least one client, and a required argument then
+      // fails schema validation before the prompt is ever rendered — the whole
+      // command is dead rather than merely under-specified. A prompt is a
+      // starting point for a conversation, so an absent window becomes a
+      // sensible default plus a note saying how to narrow it.
       argsSchema: {
         location: z
           .string()
@@ -62,20 +68,35 @@ export const registerPrompts = (server: McpServer): void => {
           .describe('Place to look at, e.g. "front". Omit to search every camera.'),
         start: z
           .string()
-          .describe('Start of the window in the console\'s local clock, e.g. "1am" or "22:00".'),
-        end: z.string().describe('End of the window, e.g. "6am".'),
+          .optional()
+          .describe(
+            'Start of the window in the console\'s local clock, e.g. "1am" or "22:00". ' +
+              "Defaults to 24 hours ago.",
+          ),
+        end: z.string().optional().describe('End of the window, e.g. "6am". Defaults to now.'),
       },
     },
-    ({ location, start, end }) =>
-      text(
+    ({ location, start, end }) => {
+      const from = start ?? "24h";
+      const to = end ?? "now";
+      const defaulted = start === undefined && end === undefined;
+      return text(
         [
-          `Find out who or what passed ${location ? `the ${location}` : "any camera"} between ${start} and ${end}.`,
+          `Find out who or what passed ${location ? `the ${location}` : "any camera"} between ${from} and ${to}.`,
+          ...(defaulted
+            ? [
+                "",
+                "No window was given, so this covers the last 24 hours. If the question was",
+                'about a narrower period, say so — local times like "1am" and "6am" are',
+                "accepted directly and are read in the console's own time zone.",
+              ]
+            : []),
           "",
           "Times are in the console's local zone; `unifi_protect_list_events` accepts them",
           "directly, so pass them through rather than converting by hand.",
           "",
           '1. Search with `unifi_protect_list_events`, types `["smartDetectZone"]` and',
-          `   smartDetectTypes ["person"]${location ? `, location "${location}"` : ""}.`,
+          `   smartDetectTypes ["person"], start "${from}", end "${to}"${location ? `, location "${location}"` : ""}.`,
           "2. READ THE `warnings` FIELD BEFORE REPORTING ANYTHING. A camera with person",
           "   detection disabled contributes zero matches, and zero is NOT evidence that nobody",
           "   was there. If any warning says a detector is off, you have not answered the",
@@ -91,6 +112,7 @@ export const registerPrompts = (server: McpServer): void => {
           "   whose motion zone excludes part of the scene. A thumbnail is the triggering frame",
           "   only, so someone entering later in a clip does not appear in it.",
         ].join("\n"),
-      ),
+      );
+    },
   );
 };
