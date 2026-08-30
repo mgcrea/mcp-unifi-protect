@@ -4,6 +4,7 @@ import type { SessionProvider } from "../client/auth.js";
 import type { DeviceCache } from "../client/device-cache.js";
 import type { ProtectClient } from "../client/protect.js";
 import { isConfigured, type Config } from "../config.js";
+import { registerAuditTools } from "./audit.js";
 import { registerCameraTools } from "./cameras.js";
 import { registerDeviceTools } from "./devices.js";
 import { registerEventTools } from "./events.js";
@@ -37,6 +38,7 @@ export const registerTools = (server: McpServer, client: ProtectClient, ctx: Too
   if (!isConfigured(ctx.config)) return;
 
   registerSystemTools(server, client, ctx);
+  registerAuditTools(server, client, ctx);
   registerCameraTools(server, client, ctx);
   registerEventTools(server, client, ctx);
   registerDeviceTools(server, client, ctx);
