@@ -10,7 +10,9 @@ import {
 import { createDeviceCache, type DeviceCache } from "./client/device-cache.js";
 import { ProtectClient } from "./client/protect.js";
 import { createHttpFetch } from "./client/tls.js";
-import { consoleOrigin, type Config } from "./config.js";
+import { consoleOrigin, isConfigured, type Config } from "./config.js";
+import { registerPrompts } from "./prompts.js";
+import { registerResources } from "./resources.js";
 import { registerTools } from "./tools/index.js";
 
 export const SERVER_NAME = BUILD_INFO.name;
@@ -82,6 +84,14 @@ export const createServer = (opts: CreateServerOptions): CreatedServer => {
     session,
     devices,
   });
+
+  // Gated the same way the read tools are: an unconfigured server advertising
+  // resources it cannot read would fail on every fetch, which is worse than not
+  // offering them. Prompts follow, since both of them drive those tools.
+  if (isConfigured(config)) {
+    registerResources(server, client, config);
+    registerPrompts(server);
+  }
 
   return { server, client, session, devices };
 };
