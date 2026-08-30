@@ -25,6 +25,7 @@ const config = (overrides: Partial<Config> = {}): Config => ({
   maxRetries: 3,
   maxDownloadBytes: 200_000_000,
   deviceCacheTtlSeconds: 60,
+  locations: {},
   ...overrides,
 });
 

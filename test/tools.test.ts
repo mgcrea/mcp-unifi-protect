@@ -7,6 +7,17 @@ import type { Config } from "../src/config.js";
 import { createServer } from "../src/server.js";
 import { calledInit, calledUrl, fetchMock } from "./helpers.js";
 
+/** A camera whose zone asks for person while the device list blocks it. */
+const GATED_CAMERA = {
+  id: "cam1",
+  name: "Carillon",
+  isConnected: true,
+  featureFlags: { hasSmartDetect: true, smartDetectTypes: ["person", "animal"] },
+  smartDetectSettings: { objectTypes: ["animal"] },
+  smartDetectZones: [{ id: 1, objectTypes: ["person", "animal"] }],
+  recordingSettings: { mode: "always" },
+};
+
 const baseConfig: Config = {
   mode: "local",
   modeSource: "default",
@@ -21,6 +32,7 @@ const baseConfig: Config = {
   maxRetries: 3,
   maxDownloadBytes: 200_000_000,
   deviceCacheTtlSeconds: 60,
+  locations: {},
 };
 
 const jsonResponse = (body: unknown, status = 200): Response =>
@@ -62,7 +74,9 @@ const READ_TOOLS = [
   "unifi_protect_get_camera",
   "unifi_protect_get_camera_snapshot",
   "unifi_protect_get_event",
+  "unifi_protect_check_settings",
   "unifi_protect_get_event_thumbnail",
+  "unifi_protect_get_event_thumbnails",
   "unifi_protect_get_system_info",
   "unifi_protect_list_cameras",
   "unifi_protect_list_chimes",
@@ -80,6 +94,7 @@ const READ_TOOLS = [
 const WRITE_TOOLS = [
   "unifi_protect_reboot_camera",
   "unifi_protect_reboot_nvr",
+  "unifi_protect_set_camera_detections",
   "unifi_protect_set_camera_recording_mode",
   "unifi_protect_update_camera",
   "unifi_protect_update_chime",
@@ -353,5 +368,209 @@ describe("destructive tools", () => {
     expect(result.isError).toBe(true);
     // Crucially: the console was never touched. The schema rejected it first.
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("list_events", () => {
+  const routed = (events: unknown[] = []) =>
+    fetchMock(async (url) => {
+      const href = String(url);
+      if (href.includes("/cameras")) return jsonResponse([GATED_CAMERA]);
+      if (href.includes("/nvr")) return jsonResponse({ timezone: "Europe/Paris" });
+      return jsonResponse(events);
+    });
+
+  const callEvents = async (
+    args: Record<string, unknown>,
+    impl = routed(),
+  ): Promise<{ payload: Record<string, unknown>; impl: ReturnType<typeof routed> }> => {
+    const client = await connect(baseConfig, impl as unknown as typeof fetch);
+    const result = await client.callTool({ name: "unifi_protect_list_events", arguments: args });
+    const text = (result.content as { text: string }[])[0]!.text;
+    return { payload: JSON.parse(text) as Record<string, unknown>, impl };
+  };
+
+  it("filters by camera ON THE CONSOLE rather than after the fact", async () => {
+    // Filtering client-side fetched the newest `limit` events across ALL
+    // cameras and discarded most, so a quiet camera over a long window came
+    // back empty while reporting a successful search.
+    const { impl } = await callEvents({ cameraId: "cam1", start: "7d" });
+    const eventsCall = impl.mock.calls.map((c) => String(c[0])).find((u) => u.includes("/events"));
+    expect(eventsCall).toContain("cameras=cam1");
+  });
+
+  it("repeats the cameras parameter for several ids", async () => {
+    // A comma-separated list is accepted by the console and silently matches
+    // nothing, so the repeated form is the only correct one.
+    const { impl } = await callEvents({ cameraIds: ["cam1", "cam2"], start: "7d" });
+    const eventsCall = impl.mock.calls.map((c) => String(c[0])).find((u) => u.includes("/events"))!;
+    expect(eventsCall).toContain("cameras=cam1");
+    expect(eventsCall).toContain("cameras=cam2");
+    expect(eventsCall).not.toContain("cameras=cam1%2Ccam2");
+  });
+
+  it("warns that zero results mean the detector was off, not that nothing happened", async () => {
+    const { payload } = await callEvents({
+      cameraId: "cam1",
+      smartDetectTypes: ["person"],
+      start: "1am",
+      end: "6am",
+    });
+    expect(payload.count).toBe(0);
+    const warnings = (payload.warnings as string[]) ?? [];
+    expect(warnings.join(" ")).toContain("detector was OFF");
+  });
+
+  it("interprets local times in the console's own zone", async () => {
+    const { payload } = await callEvents({ start: "1am", end: "6am" });
+    const window = payload.window as Record<string, string>;
+    expect(window.timeZone).toBe("Europe/Paris");
+    expect(window.localStart).toContain("01:00:00");
+    expect(window.localEnd).toContain("06:00:00");
+  });
+
+  it("resolves a configured location to camera ids", async () => {
+    const client = await connect(
+      { ...baseConfig, locations: { front: ["Carillon"] } },
+      routed() as unknown as typeof fetch,
+    );
+    const result = await client.callTool({
+      name: "unifi_protect_list_events",
+      arguments: { location: "front", start: "7d" },
+    });
+    const payload = JSON.parse((result.content as { text: string }[])[0]!.text) as {
+      cameras?: string[];
+    };
+    expect(payload.cameras).toEqual(["Carillon"]);
+  });
+
+  it("names the configured locations when given an unknown one", async () => {
+    const client = await connect(
+      { ...baseConfig, locations: { front: ["Carillon"] } },
+      routed() as unknown as typeof fetch,
+    );
+    const result = await client.callTool({
+      name: "unifi_protect_list_events",
+      arguments: { location: "back", start: "7d" },
+    });
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe("set_camera_detections", () => {
+  const routed = () =>
+    fetchMock(async (url, init) => {
+      const method = (init as { method?: string } | undefined)?.method ?? "GET";
+      if (method === "PATCH") {
+        return jsonResponse({
+          ...GATED_CAMERA,
+          smartDetectSettings: { objectTypes: ["person", "animal"], audioTypes: ["alrmSpeak"] },
+          smartDetectZones: [{ id: 1, objectTypes: ["person", "animal"] }],
+        });
+      }
+      return jsonResponse({
+        ...GATED_CAMERA,
+        featureFlags: {
+          ...GATED_CAMERA.featureFlags,
+          smartDetectAudioTypes: ["alrmSmoke", "alrmSpeak"],
+        },
+        smartDetectSettings: {
+          objectTypes: ["animal"],
+          audioTypes: ["alrmSmoke", "smoke_cmonx"],
+        },
+      });
+    });
+
+  it("drops values the console reports but refuses on write", async () => {
+    // smoke_cmonx comes out of every read and fails every PATCH with
+    // "The smart detection feature is not enabled for: smoke_cmonx".
+    const impl = routed();
+    const client = await connect(
+      { ...baseConfig, allowWrites: true },
+      impl as unknown as typeof fetch,
+    );
+    await client.callTool({
+      name: "unifi_protect_set_camera_detections",
+      arguments: { cameraId: "cam1", audioTypes: ["alrmSpeak", "smoke_cmonx"] },
+    });
+    const patch = impl.mock.calls.find(
+      (c) => (c[1] as { method?: string } | undefined)?.method === "PATCH",
+    );
+    const body = JSON.parse((patch![1] as { body: string }).body) as {
+      smartDetectSettings: { audioTypes: string[] };
+    };
+    expect(body.smartDetectSettings.audioTypes).toEqual(["alrmSpeak"]);
+  });
+
+  it("brings the zones into line so none asks for a blocked type", async () => {
+    const impl = routed();
+    const client = await connect(
+      { ...baseConfig, allowWrites: true },
+      impl as unknown as typeof fetch,
+    );
+    await client.callTool({
+      name: "unifi_protect_set_camera_detections",
+      arguments: { cameraId: "cam1", objectTypes: ["person", "animal"] },
+    });
+    const patch = impl.mock.calls.find(
+      (c) => (c[1] as { method?: string } | undefined)?.method === "PATCH",
+    );
+    const body = JSON.parse((patch![1] as { body: string }).body) as {
+      smartDetectZones: { objectTypes: string[] }[];
+    };
+    expect(body.smartDetectZones[0]!.objectTypes).toEqual(["person", "animal"]);
+  });
+
+  it("rejects a type the camera cannot do, naming what it supports", async () => {
+    const client = await connect(
+      { ...baseConfig, allowWrites: true },
+      routed() as unknown as typeof fetch,
+    );
+    const result = await client.callTool({
+      name: "unifi_protect_set_camera_detections",
+      arguments: { cameraId: "cam1", objectTypes: ["vehicle"] },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as { text: string }[])[0]!.text).toContain("does not support");
+  });
+});
+
+describe("resources and prompts", () => {
+  it("exposes the console, cameras and locations resources", async () => {
+    const client = await connect(baseConfig);
+    const uris = (await client.listResources()).resources.map((r) => r.uri).toSorted();
+    expect(uris).toEqual([
+      "unifi-protect://cameras",
+      "unifi-protect://console",
+      "unifi-protect://locations",
+    ]);
+  });
+
+  it("exposes the two workflow prompts", async () => {
+    const client = await connect(baseConfig);
+    const names = (await client.listPrompts()).prompts.map((p) => p.name).toSorted();
+    expect(names).toEqual(["check_camera_settings", "who_passed"]);
+  });
+
+  it("registers no resources or prompts when nothing is configured", async () => {
+    // They would fail on every read, which is worse than not offering them.
+    const client = await connect({
+      ...baseConfig,
+      baseUrl: undefined,
+      username: undefined,
+      password: undefined,
+    });
+    await expect(client.listResources()).rejects.toThrow();
+  });
+
+  it("tells who_passed to check the warnings before answering", async () => {
+    const client = await connect(baseConfig);
+    const prompt = await client.getPrompt({
+      name: "who_passed",
+      arguments: { start: "1am", end: "6am" },
+    });
+    const body = prompt.messages.map((m) => (m.content as { text: string }).text).join(" ");
+    expect(body).toContain("warnings");
+    expect(body).toContain("thumbnails");
   });
 });
