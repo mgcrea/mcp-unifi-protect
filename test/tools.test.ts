@@ -10,6 +10,7 @@ import { calledInit, calledUrl, fetchMock } from "./helpers.js";
 const baseConfig: Config = {
   mode: "local",
   modeSource: "default",
+  issues: [],
   baseUrl: "https://192.168.1.1",
   username: "mcp",
   password: "secret",

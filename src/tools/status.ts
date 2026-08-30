@@ -50,6 +50,7 @@ export const registerStatusTools = (
           return {
             configured: false,
             mode: ctx.config.mode,
+            ...(ctx.config.issues.length > 0 ? { issues: ctx.config.issues } : {}),
             host: ctx.config.baseUrl ?? null,
             available_without_credentials: ["unifi_protect_auth_status"],
             setup: setupInstructions(ctx.config),
@@ -84,6 +85,9 @@ export const registerStatusTools = (
         return {
           configured: true,
           mode: ctx.config.mode,
+          // Incomplete or contradictory configuration. Never fatal — reported
+          // here so it reaches the client, which never sees stderr.
+          ...(ctx.config.issues.length > 0 ? { issues: ctx.config.issues } : {}),
           ...(ctx.config.modeSource === "invalid"
             ? { modeWarning: `UNIFI_PROTECT_MODE was not recognised; assumed ${ctx.config.mode}.` }
             : {}),

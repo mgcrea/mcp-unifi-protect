@@ -70,10 +70,38 @@ describe("loadConfig", () => {
     expect(loadConfig({ UNIFI_PROTECT_HOST: "   " }, NO_FILE).baseUrl).toBeUndefined();
   });
 
-  it("flags a half-configured install rather than failing later", () => {
-    expect(() => loadConfig({ UNIFI_PROTECT_HOST: "1.2.3.4" }, NO_FILE)).toThrow(
-      /UNIFI_PROTECT_USERNAME/,
-    );
+  it("reports a half-configured install as an issue, and never throws", () => {
+    // A throw from loadConfig exits the process, which the client shows as a
+    // bare "Connection closed" with stderr swallowed — the one failure this
+    // server exists to avoid. Incomplete config must be data, not an exception.
+    const c = loadConfig({ UNIFI_PROTECT_HOST: "1.2.3.4" }, NO_FILE);
+    expect(c.issues.join(" ")).toMatch(/UNIFI_PROTECT_USERNAME/);
+    expect(isConfigured(c)).toBe(false);
+  });
+
+  it("never throws for any partial combination of credentials", () => {
+    const partials: NodeJS.ProcessEnv[] = [
+      { UNIFI_PROTECT_HOST: "1.2.3.4" },
+      { UNIFI_PROTECT_USERNAME: "u" },
+      { UNIFI_PROTECT_PASSWORD: "p" },
+      { UNIFI_PROTECT_HOST: "1.2.3.4", UNIFI_PROTECT_USERNAME: "u" },
+      { UNIFI_PROTECT_API_KEY: "k" },
+      { UNIFI_PROTECT_CONSOLE_ID: "c" },
+      { UNIFI_PROTECT_MODE: "cloud" },
+      { UNIFI_PROTECT_MODE: "cloud", UNIFI_PROTECT_API_KEY: "k" },
+      { UNIFI_PROTECT_MODE: "nonsense", UNIFI_PROTECT_HOST: "1.2.3.4" },
+    ];
+    for (const env of partials) {
+      expect(() => loadConfig(env, NO_FILE), JSON.stringify(env)).not.toThrow();
+    }
+  });
+
+  it("names the API-key trap when a key is set in local mode", () => {
+    // Verified on a UNVR running Protect 7.2.105: a console-issued key answers
+    // 200 on the official Integration API and 401 on every private path.
+    const c = loadConfig({ UNIFI_PROTECT_HOST: "1.2.3.4", UNIFI_PROTECT_API_KEY: "k" }, NO_FILE);
+    expect(c.mode).toBe("local");
+    expect(c.issues.join(" ")).toMatch(/local mode cannot use it/);
   });
 
   it("names the local-account trap in the setup instructions", () => {
@@ -171,12 +199,25 @@ describe("modes", () => {
 
   it("cloud mode needs no local account, and says so when half-set", () => {
     expect(isConfigured(loadConfig({ UNIFI_PROTECT_MODE: "cloud" }, NONE))).toBe(false);
-    expect(() =>
-      loadConfig({ UNIFI_PROTECT_MODE: "cloud", UNIFI_PROTECT_API_KEY: "k" }, NONE),
-    ).toThrow(/UNIFI_PROTECT_CONSOLE_ID/);
-    expect(() =>
-      loadConfig({ UNIFI_PROTECT_MODE: "cloud", UNIFI_PROTECT_CONSOLE_ID: "c" }, NONE),
-    ).toThrow(/UNIFI_PROTECT_API_KEY/);
+    expect(
+      loadConfig({ UNIFI_PROTECT_MODE: "cloud", UNIFI_PROTECT_API_KEY: "k" }, NONE).issues.join(
+        " ",
+      ),
+    ).toMatch(/UNIFI_PROTECT_CONSOLE_ID/);
+    expect(
+      loadConfig({ UNIFI_PROTECT_MODE: "cloud", UNIFI_PROTECT_CONSOLE_ID: "c" }, NONE).issues.join(
+        " ",
+      ),
+    ).toMatch(/UNIFI_PROTECT_API_KEY/);
+  });
+
+  it("local setup guidance warns that an API key will not work", () => {
+    // The trap: a console-issued key IS accepted by the official Integration
+    // API, so it looks valid, while every private-API call answers 401.
+    // Verified against a UNVR on Protect 7.2.105.
+    const text = setupInstructions(loadConfig({}, NONE)).join(" ");
+    expect(text).toMatch(/API key will NOT work in local mode/);
+    expect(text).toMatch(/username and password is the only local option/i);
   });
 
   it("cloud setup guidance names the 403 org trap", () => {

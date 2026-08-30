@@ -112,56 +112,26 @@ const ConfigSchema = z
     maxDownloadBytes: z.number().int().positive().default(200_000_000),
     /** How long a cached camera id→name index stays fresh, in seconds. */
     deviceCacheTtlSeconds: z.number().int().nonnegative().max(3600).default(60),
+    /**
+     * Configuration problems that are worth saying out loud but must never stop
+     * the server. Reported by unifi_protect_auth_status and the startup banner.
+     */
+    issues: z.array(z.string()).default([]),
   })
   .strict()
-  .superRefine((cfg, ctx) => {
-    // Deliberately NOT an error when nothing is configured. An MCP server that
-    // exits at startup shows up in the client as a bare "MCP error -32000:
-    // Connection closed" with stderr swallowed — so the one message that would
-    // have explained what to set never reaches anyone. The server stays up,
-    // registers unifi_protect_auth_status, and reports the gap as data.
+  .superRefine(() => {
+    // Deliberately EMPTY, and deliberately still here as the place someone will
+    // look to add a rule.
     //
-    // A half-configured install IS worth flagging, though: a credential with no
-    // partner is a typo, not a deliberate state, and saying so beats letting
-    // every call fail with an auth error that reads like a wrong password.
-    if (cfg.mode === "cloud") {
-      if (cfg.apiKey && !cfg.consoleId) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["consoleId"],
-          message:
-            "Cloud mode has no console to address. Set UNIFI_PROTECT_CONSOLE_ID — list yours " +
-            'with: curl -H "X-API-KEY: $UNIFI_PROTECT_API_KEY" https://api.ui.com/v1/hosts',
-        });
-      }
-      if (cfg.consoleId && !cfg.apiKey) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["apiKey"],
-          message:
-            "UNIFI_PROTECT_CONSOLE_ID is set but UNIFI_PROTECT_API_KEY is not. Create a key at " +
-            "unifi.ui.com → Settings → API Keys.",
-        });
-      }
-      return;
-    }
-
-    if (cfg.baseUrl && !cfg.username) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["username"],
-        message:
-          "UNIFI_PROTECT_HOST is set but UNIFI_PROTECT_USERNAME is not. Both, plus " +
-          "UNIFI_PROTECT_PASSWORD, are needed to reach the console.",
-      });
-    }
-    if (cfg.username && !cfg.password) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["password"],
-        message: "UNIFI_PROTECT_USERNAME is set but UNIFI_PROTECT_PASSWORD is not.",
-      });
-    }
+    // Nothing about a half-configured install may be an error. `parse` throws on
+    // any issue, and a throw from loadConfig exits the process — which shows in
+    // the client as a bare "MCP error -32000: Connection closed" with stderr
+    // swallowed, so the message explaining what to fix never reaches anyone.
+    // That is the single failure this server exists to avoid, and it is easy to
+    // reintroduce by adding one innocuous-looking ctx.addIssue here.
+    //
+    // Incomplete configurations collect into `issues` in loadConfig instead,
+    // and surface through unifi_protect_auth_status as data.
   });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -357,14 +327,64 @@ export const loadConfig = (
     file.snapshotDir ??
     join(homedir(), ".cache", "unifi-protect");
 
+  const issues: string[] = [];
+  const apiKey = trimmed(env.UNIFI_PROTECT_API_KEY) ?? file.apiKey;
+  const consoleId = trimmed(env.UNIFI_PROTECT_CONSOLE_ID) ?? file.consoleId;
+  const username = trimmed(env.UNIFI_PROTECT_USERNAME) ?? file.username;
+  const password = trimmed(env.UNIFI_PROTECT_PASSWORD) ?? file.password;
+
+  if (mode === "cloud") {
+    if (apiKey && !consoleId) {
+      issues.push(
+        "UNIFI_PROTECT_CONSOLE_ID is not set, so cloud mode has no console to address. List " +
+          'yours with: curl -H "X-API-KEY: $UNIFI_PROTECT_API_KEY" https://api.ui.com/v1/hosts',
+      );
+    }
+    if (consoleId && !apiKey) {
+      issues.push(
+        "UNIFI_PROTECT_CONSOLE_ID is set but UNIFI_PROTECT_API_KEY is not. Create a key at " +
+          "unifi.ui.com → Settings → API Keys.",
+      );
+    }
+  } else {
+    if (host && !username) {
+      issues.push(
+        "UNIFI_PROTECT_HOST is set but UNIFI_PROTECT_USERNAME is not. Local mode needs a " +
+          "console login; an API key cannot authenticate the private Protect API.",
+      );
+    }
+    if (username && !password) {
+      issues.push("UNIFI_PROTECT_USERNAME is set but UNIFI_PROTECT_PASSWORD is not.");
+    }
+    if ((username ?? password) && !host) {
+      issues.push("UNIFI_PROTECT_HOST is not set, so there is no console to reach.");
+    }
+    if (apiKey && !username) {
+      // The trap this server keeps having to explain.
+      issues.push(
+        "UNIFI_PROTECT_API_KEY is set but local mode cannot use it: a console key authenticates " +
+          "Ubiquiti's official Integration API, while the private API this server uses returns " +
+          "401. Set UNIFI_PROTECT_USERNAME and UNIFI_PROTECT_PASSWORD, or use " +
+          "UNIFI_PROTECT_MODE=cloud with UNIFI_PROTECT_CONSOLE_ID.",
+      );
+    }
+  }
+  if (source === "invalid") {
+    issues.push(
+      `UNIFI_PROTECT_MODE was not recognised, so ${mode} mode was assumed. Valid values: ` +
+        `${MODES.join(", ")}.`,
+    );
+  }
+
   return ConfigSchema.parse({
     mode,
     modeSource: source,
+    issues,
     baseUrl: host ? normalizeBaseUrl(host) : undefined,
-    consoleId: trimmed(env.UNIFI_PROTECT_CONSOLE_ID) ?? file.consoleId,
-    apiKey: trimmed(env.UNIFI_PROTECT_API_KEY) ?? file.apiKey,
-    username: trimmed(env.UNIFI_PROTECT_USERNAME) ?? file.username,
-    password: trimmed(env.UNIFI_PROTECT_PASSWORD) ?? file.password,
+    consoleId,
+    apiKey,
+    username,
+    password,
     totp: trimmed(env.UNIFI_PROTECT_TOTP),
     verifyTls: parseBool(env.UNIFI_PROTECT_VERIFY_TLS) ?? file.verifyTls,
     allowWrites: parseBool(env.UNIFI_PROTECT_ALLOW_WRITES) ?? file.allowWrites,
@@ -439,6 +459,13 @@ export const setupInstructions = (config: Config): string[] => {
     "Set UNIFI_PROTECT_HOST to your console's address — the IP or hostname of the UDM Pro, " +
       "UNVR or Cloud Key, e.g. 192.168.1.1 (https:// is assumed, and a :port is preserved).",
     "Set UNIFI_PROTECT_USERNAME and UNIFI_PROTECT_PASSWORD to a console login.",
+    // The thing everyone tries first. Saying so here costs one line and saves
+    // an afternoon: the key is accepted by the official Integration API, so it
+    // looks valid, while every private-API call answers 401.
+    "An API key will NOT work in local mode. A key issued on the console authenticates " +
+      "Ubiquiti's official Integration API, but the private API this server uses refuses it " +
+      "(verified on Protect 7.2.105: /proxy/protect/integration/v1/* returns 200 while " +
+      "/proxy/protect/api/* returns 401). A username and password is the only local option.",
     "Create a dedicated LOCAL user for this rather than reusing your own: UniFi OS → Settings → " +
       "Admins & Users → Add User → Local Access Only, and give it Protect permissions only. A " +
       "Ubiquiti cloud (SSO) account may fail local login entirely, and a local account keeps the " +

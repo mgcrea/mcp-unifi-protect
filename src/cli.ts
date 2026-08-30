@@ -55,6 +55,8 @@ const main = async (): Promise<void> => {
   // Connecting successfully but exposing one tool is confusing unless we say
   // why. The server no longer refuses to start over this, so the banner and
   // unifi_protect_auth_status are the only channels left.
+  for (const issue of config.issues) stderrLogger.warn(`  ${issue}`);
+
   if (!isConfigured(config)) {
     stderrLogger.warn("  not configured — only unifi_protect_auth_status is available:");
     for (const line of setupInstructions(config)) stderrLogger.warn(`  ${line}`);

@@ -63,8 +63,52 @@ is reported through `unifi_protect_auth_status` rather than killing the server.
 `403 user cannot access host in the organization` for a console outside the
 organization it was issued in — valid key, wrong org, and the message reads nothing like
 a credentials problem. And API keys are **per-console**: a key created on your Network
-gateway does not authenticate against the NVR running Protect, and the NVR rejects it
-exactly as it rejects a made-up key.
+gateway or a UNAS does not authenticate against the NVR running Protect, and the NVR
+rejects it exactly as it rejects a made-up key.
+
+### Why local mode needs a username and password
+
+An API key looks like it ought to work here, and it is the obvious thing to reach for.
+It does not, and the reason is worth writing down so nobody spends an afternoon on it.
+
+A key created **on the console itself** (UniFi OS → Control Plane → Integrations) is
+recognised — but only by Ubiquiti's _official_ Integration API. It is refused by the
+private API this server depends on. Tested against a UNVR on Protect 7.2.105 with a key
+issued on that console:
+
+| Endpoint                                  | With a console API key |
+| ----------------------------------------- | ---------------------- |
+| `/proxy/protect/integration/v1/meta/info` | `200`                  |
+| `/proxy/protect/integration/v1/cameras`   | `200`                  |
+| `/proxy/protect/integration/v1/nvrs`      | `200`                  |
+| `/proxy/protect/api/nvr`                  | **`401`**              |
+| `/proxy/protect/api/cameras`              | **`401`**              |
+| `/proxy/protect/api/events`               | **`401`**              |
+| `/proxy/protect/api/bootstrap`            | **`500`**              |
+
+A fabricated key returns `401` on the official API too, so the `200`s above confirm the
+key really was valid — the private API simply does not accept key auth.
+
+Putting all three paths together:
+
+| Path                          | Authenticates with    | Private API (event history, snapshots) |
+| ----------------------------- | --------------------- | -------------------------------------- |
+| `local` + username / password | session cookie + CSRF | ✅                                     |
+| `local` + API key             | `X-API-KEY`           | ❌ `401`                               |
+| `cloud` + API key             | `X-API-KEY`           | ✅                                     |
+
+The asymmetry is not arbitrary. Over the connector, `api.ui.com` authenticates _you_ by
+key and then reaches the console over its own trusted channel, so the console is never
+asked to accept a key on a private path. On the LAN there is no such intermediary, and
+the private API only knows the session the web app itself uses.
+
+**So a local-only deployment needs a username and password.** That is a property of
+Protect, not a shortcut taken here. Use a dedicated Local-Access-Only account with
+View Only rights, as described below, and the credential's blast radius stays small.
+
+The one thing a console API key _would_ unlock is the PTZ move commands
+(`ptz/goto`, `ptz/patrol/start`, `ptz/patrol/stop`), which exist only on the official
+Integration API — see [Not implemented](#not-implemented).
 
 ## Security
 
@@ -291,6 +335,11 @@ unless you have installed a trusted certificate on the console.
 valid but was issued in an organization that does not contain that console. Check the
 console appears in `curl -H "X-API-KEY: $KEY" https://api.ui.com/v1/hosts`; if the web
 dashboard shows it but that call does not, they are different organizations.
+
+**I set an API key for local mode and everything returns 401.** Local mode cannot use an
+API key — see [Why local mode needs a username and password](#why-local-mode-needs-a-username-and-password).
+Set `UNIFI_PROTECT_USERNAME` and `UNIFI_PROTECT_PASSWORD`, or switch to `cloud` mode,
+where a key is all you need.
 
 **A local API key returns 401 on everything.** API keys are per-console. A key created
 on your Network gateway is not valid on the NVR running Protect — and the NVR rejects an
