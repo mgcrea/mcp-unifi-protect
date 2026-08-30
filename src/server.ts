@@ -4,6 +4,7 @@ import { BUILD_INFO } from "./build-info.js";
 import { createSessionProvider, type Logger, type SessionProvider } from "./client/auth.js";
 import { createDeviceCache, type DeviceCache } from "./client/device-cache.js";
 import { ProtectClient } from "./client/protect.js";
+import { createHttpFetch } from "./client/tls.js";
 import type { Config } from "./config.js";
 import { registerTools } from "./tools/index.js";
 
@@ -30,11 +31,21 @@ export const createServer = (opts: CreateServerOptions): CreatedServer => {
   const { config } = opts;
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
 
+  // Built once and shared by the session provider and the client, so the TLS
+  // policy is a property of this server's requests rather than of the process.
+  // Tests inject `opts.fetch` and never reach createHttpFetch.
+  const fetchImpl =
+    opts.fetch ??
+    createHttpFetch({
+      insecureTls: !config.verifyTls,
+      ...(opts.logger ? { logger: opts.logger } : {}),
+    });
+
   const session =
     opts.session ??
     createSessionProvider({
       config,
-      ...(opts.fetch ? { fetch: opts.fetch } : {}),
+      fetch: fetchImpl,
       ...(opts.logger ? { logger: opts.logger } : {}),
     });
 
@@ -47,7 +58,7 @@ export const createServer = (opts: CreateServerOptions): CreatedServer => {
     maxRetries: config.maxRetries,
     userAgent: USER_AGENT,
     maxDownloadBytes: config.maxDownloadBytes,
-    ...(opts.fetch ? { fetch: opts.fetch } : {}),
+    fetch: fetchImpl,
     ...(opts.logger ? { logger: opts.logger } : {}),
   });
 

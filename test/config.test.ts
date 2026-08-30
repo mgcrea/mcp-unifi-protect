@@ -34,16 +34,20 @@ describe("loadConfig", () => {
     const config = loadConfig({}, NO_FILE);
     expect(isConfigured(config)).toBe(false);
     expect(config.allowWrites).toBe(false);
-    expect(config.verifyTls).toBe(false);
+    expect(config.verifyTls).toBe(true);
   });
 
-  it("defaults writes off and TLS verification off", () => {
+  it("defaults writes off and TLS verification ON", () => {
     const config = loadConfig(
       { UNIFI_PROTECT_HOST: "1.2.3.4", UNIFI_PROTECT_USERNAME: "u", UNIFI_PROTECT_PASSWORD: "p" },
       NO_FILE,
     );
     expect(config.allowWrites).toBe(false);
-    expect(config.verifyTls).toBe(false);
+    // Verification is on by default and turning it off is an explicit act. A
+    // console addressed by IP cannot pass it — the certificate has no IP SAN —
+    // so an IP host is exactly the case that must fail loudly rather than
+    // silently downgrade.
+    expect(config.verifyTls).toBe(true);
     expect(isConfigured(config)).toBe(true);
   });
 

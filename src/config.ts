@@ -37,11 +37,16 @@ const ConfigSchema = z
      */
     totp: z.string().min(1).optional(),
     /**
-     * Consoles ship a self-signed certificate reached by IP, so neither chain
-     * trust nor hostname verification can succeed. Defaults to false for that
-     * reason; set true only if you installed a real certificate on the console.
+     * On by default. Turning it off is scoped to this server's own requests via
+     * an undici dispatcher, not the whole process.
+     *
+     * Verifying takes two things together, and one alone does nothing: the
+     * console's certificate is self-signed (so NODE_EXTRA_CA_CERTS must point at
+     * it) AND it carries no IP SAN — `CN=unifi.local`, SANs for `unifi.local`,
+     * `localhost` and `127.0.0.1` — so UNIFI_PROTECT_HOST must be a host name
+     * that resolves to the console, never its IP address.
      */
-    verifyTls: z.boolean().default(false),
+    verifyTls: z.boolean().default(true),
     allowWrites: z.boolean().default(false),
     sessionFile: z.string().min(1),
     snapshotDir: z.string().min(1),
@@ -284,7 +289,10 @@ export const setupInstructions = (config: Config): string[] => {
     "If the account has 2FA, pass a current code once via unifi_protect_auth_login; the session " +
       "is then cached and reused. A code in UNIFI_PROTECT_TOTP expires in about 30 seconds, so " +
       "it is no use for an unattended start.",
-    "Consoles use a self-signed certificate, so UNIFI_PROTECT_VERIFY_TLS defaults to false. " +
+    "Certificate verification is ON by default. A console reached by IP can never pass it: " +
+      "the certificate is self-signed AND has no IP SAN. Either set UNIFI_PROTECT_HOST to a host " +
+      "name that resolves to the console and point NODE_EXTRA_CA_CERTS at its certificate, or " +
+      "set UNIFI_PROTECT_VERIFY_TLS=false, which is scoped to this server's requests only. " +
       "Set it to true only if you installed a certificate your machine already trusts.",
   ];
 };

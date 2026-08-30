@@ -106,8 +106,9 @@ export const registerStatusTools = (
           },
           tls: ctx.config.verifyTls
             ? "verified"
-            : "UNVERIFIED — certificate checks are off, which is the default because consoles " +
-              "ship a self-signed certificate reached by IP.",
+            : "UNVERIFIED — certificate checks are off for this server's requests only. " +
+              "Verifying needs both NODE_EXTRA_CA_CERTS pointing at the console certificate and " +
+              "UNIFI_PROTECT_HOST set to a host name: the certificate carries no IP SAN.",
           writes: ctx.allowWrites ? "enabled" : "disabled",
           api:
             "private (undocumented). Ubiquiti moves these endpoints between Protect releases, so " +

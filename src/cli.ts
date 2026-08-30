@@ -3,7 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { ZodError } from "zod";
 
 import { BUILD_INFO } from "./build-info.js";
-import { isConfigured, loadConfig, setupInstructions, type Config } from "./config.js";
+import { isConfigured, loadConfig, setupInstructions } from "./config.js";
 import { createServer } from "./server.js";
 
 // Everything goes to stderr: stdout is the MCP protocol channel, and a stray
@@ -31,25 +31,6 @@ const describeFatal = (err: unknown): string => {
   return err instanceof Error ? err.message : String(err);
 };
 
-/**
- * UniFi consoles present a self-signed certificate, and you reach them by IP, so
- * neither chain trust nor hostname verification can succeed. Node 24 bundles
- * undici but does not expose it as an importable module, so native `fetch`
- * cannot take a per-request dispatcher — which means there is no way to scope
- * this to the console's connections without adding a runtime dependency.
- *
- * So it is process-wide, and that is only acceptable because this process talks
- * to exactly one host: your console. The banner says so on every start, because
- * that line scrolling past is the last chance anyone has to notice.
- *
- * Set UNIFI_PROTECT_VERIFY_TLS=true once you have installed a certificate the
- * machine already trusts.
- */
-const applyTlsPolicy = (config: Config): void => {
-  if (config.verifyTls) return;
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-};
-
 const main = async (): Promise<void> => {
   stderrLogger.warn(
     `${BUILD_INFO.name}@${BUILD_INFO.version} (git ${BUILD_INFO.gitCommit} ${BUILD_INFO.gitCommitDate}, node ${process.version})`,
@@ -57,7 +38,6 @@ const main = async (): Promise<void> => {
 
   const config = loadConfig();
   // Before anything can open a socket.
-  applyTlsPolicy(config);
 
   const { server } = createServer({ config, logger: stderrLogger });
   const transport = new StdioServerTransport();

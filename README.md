@@ -30,12 +30,17 @@ is signed with cosign.
 never leave this process except in the login request to your console. The resulting session
 cookie is cached at `~/.config/unifi-protect/session.json` with mode `600`.
 
-**Certificate verification is OFF by default.** Consoles present a self-signed certificate and
-you reach them by IP, so neither chain trust nor hostname verification can succeed. Node bundles
-undici but does not expose it, so `fetch` cannot take a per-request dispatcher — which means
-there is no way to scope this to one host without adding a runtime dependency. It is therefore
-disabled **process-wide**, which is acceptable only because this process talks to exactly one
-host: your console. The startup banner prints `tls=UNVERIFIED` on every run.
+**Certificate verification is ON by default**, and disabling it is scoped to this server's own
+requests through an undici dispatcher — it is not `NODE_TLS_REJECT_UNAUTHORIZED`, so nothing else
+in the process is affected. (It previously _was_ process-wide, on the belief that a dispatcher
+could not be scoped without a dependency. It can, and `undici` is now that dependency.)
+
+Verifying takes two things together, and either alone achieves nothing: the certificate is
+self-signed, so `NODE_EXTRA_CA_CERTS` must point at it; **and** it is issued to `unifi.local` with
+no IP SAN, so `UNIFI_PROTECT_HOST` must be a host name that resolves to the console rather than its
+IP address. Reached by IP, verification fails on the host name however the certificate is trusted.
+See `.env.example` for the two commands. If the console has no name on your network, set
+`UNIFI_PROTECT_VERIFY_TLS=false`; the startup banner then prints `tls=UNVERIFIED` on every run.
 
 **Blast radius.** With the defaults, the worst an agent can do is read your cameras and write
 image files into the snapshot directory. With `UNIFI_PROTECT_ALLOW_WRITES=1` it can additionally
@@ -45,21 +50,21 @@ need them.
 
 ## Configure
 
-| Variable                           | Required | Default                                | What it does                                                  |
-| ---------------------------------- | -------- | -------------------------------------- | ------------------------------------------------------------- |
-| `UNIFI_PROTECT_HOST`               | yes      | —                                      | Console IP or hostname. `https://` assumed, `:port` preserved |
-| `UNIFI_PROTECT_USERNAME`           | yes      | —                                      | Console login                                                 |
-| `UNIFI_PROTECT_PASSWORD`           | yes      | —                                      | Its password                                                  |
-| `UNIFI_PROTECT_TOTP`               | no       | —                                      | 2FA code. Expires in ~30s — prefer `unifi_protect_auth_login` |
-| `UNIFI_PROTECT_VERIFY_TLS`         | no       | `false`                                | Verify the console's certificate                              |
-| `UNIFI_PROTECT_ALLOW_WRITES`       | no       | `false`                                | Register the 12 mutating tools                                |
-| `UNIFI_PROTECT_SESSION_FILE`       | no       | `~/.config/unifi-protect/session.json` | Cached session, mode 600                                      |
-| `UNIFI_PROTECT_SNAPSHOT_DIR`       | no       | `~/.cache/unifi-protect`               | Where images and exports are written                          |
-| `UNIFI_PROTECT_CONFIG`             | no       | `~/.config/unifi-protect/config.json`  | Config file location                                          |
-| `UNIFI_PROTECT_MAX_RETRIES`        | no       | `3`                                    | Retries on 401 / 429 / 5xx                                    |
-| `UNIFI_PROTECT_MAX_DOWNLOAD_BYTES` | no       | `200000000`                            | Refuse a download larger than this                            |
-| `UNIFI_PROTECT_DEVICE_CACHE_TTL`   | no       | `60`                                   | Camera id→name cache lifetime, seconds                        |
-| `UNIFI_PROTECT_DEBUG`              | no       | —                                      | Verbose request logging to stderr                             |
+| Variable                           | Required | Default                                | What it does                                                    |
+| ---------------------------------- | -------- | -------------------------------------- | --------------------------------------------------------------- |
+| `UNIFI_PROTECT_HOST`               | yes      | —                                      | Console IP or hostname. `https://` assumed, `:port` preserved   |
+| `UNIFI_PROTECT_USERNAME`           | yes      | —                                      | Console login                                                   |
+| `UNIFI_PROTECT_PASSWORD`           | yes      | —                                      | Its password                                                    |
+| `UNIFI_PROTECT_TOTP`               | no       | —                                      | 2FA code. Expires in ~30s — prefer `unifi_protect_auth_login`   |
+| `UNIFI_PROTECT_VERIFY_TLS`         | no       | `true`                                 | Verify the console's certificate (needs a host name, not an IP) |
+| `UNIFI_PROTECT_ALLOW_WRITES`       | no       | `false`                                | Register the 12 mutating tools                                  |
+| `UNIFI_PROTECT_SESSION_FILE`       | no       | `~/.config/unifi-protect/session.json` | Cached session, mode 600                                        |
+| `UNIFI_PROTECT_SNAPSHOT_DIR`       | no       | `~/.cache/unifi-protect`               | Where images and exports are written                            |
+| `UNIFI_PROTECT_CONFIG`             | no       | `~/.config/unifi-protect/config.json`  | Config file location                                            |
+| `UNIFI_PROTECT_MAX_RETRIES`        | no       | `3`                                    | Retries on 401 / 429 / 5xx                                      |
+| `UNIFI_PROTECT_MAX_DOWNLOAD_BYTES` | no       | `200000000`                            | Refuse a download larger than this                              |
+| `UNIFI_PROTECT_DEVICE_CACHE_TTL`   | no       | `60`                                   | Camera id→name cache lifetime, seconds                          |
+| `UNIFI_PROTECT_DEBUG`              | no       | —                                      | Verbose request logging to stderr                               |
 
 The config file mirrors these as camelCase JSON (`host`, `username`, `verifyTls`, …). It is
 strict: an unknown key is an error rather than a silent no-op. **Environment variables win over
@@ -232,7 +237,7 @@ returns the setup steps as data.
 `UNIFI_PROTECT_ALLOW_WRITES=1`. That is the design, not a bug — an absent tool cannot be called,
 whereas a refused one invites an agent to keep trying.
 
-**`self-signed certificate` errors.** `UNIFI_PROTECT_VERIFY_TLS` must be `false` (the default)
+**`self-signed certificate` errors.** Verification is on by default and cannot pass against an IP address. Either address the console by name with `NODE_EXTRA_CA_CERTS` set, or `UNIFI_PROTECT_VERIFY_TLS=false`
 unless you have installed a trusted certificate on the console.
 
 **Everything returns 401.** Check the account is a local one, and that it has Protect
