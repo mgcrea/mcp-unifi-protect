@@ -21,10 +21,11 @@ at all unless you ask for them.
 
 ## Security
 
-**Supply chain.** Two runtime dependencies: the MCP SDK and zod. HTTP is native `fetch` with a
-hand-rolled retry; there is no HTTP client, no logger, no crypto library. Published from CI with
-provenance via OIDC trusted publishing; the container image is multi-arch, carries an SBOM, and
-is signed with cosign.
+**Supply chain.** Three runtime dependencies: the MCP SDK, zod, and `undici`. Retry and backoff
+are hand-rolled; there is no HTTP client wrapper, no logger, no crypto library. `undici` earns its
+place by being the only way to scope the TLS exception below to this server's own requests — see
+the note there. Published from CI with provenance via OIDC trusted publishing; the container
+image is multi-arch, carries an SBOM, and is signed with cosign.
 
 **Your credentials.** The username and password come from the environment or a config file, and
 never leave this process except in the login request to your console. The resulting session
@@ -44,9 +45,8 @@ See `.env.example` for the two commands. If the console has no name on your netw
 
 **Blast radius.** With the defaults, the worst an agent can do is read your cameras and write
 image files into the snapshot directory. With `UNIFI_PROTECT_ALLOW_WRITES=1` it can additionally
-reconfigure devices, move PTZ cameras, stop a camera recording, and reboot a camera or the whole
-console. Use a Local-Access-Only account with View Only rights and leave writes off unless you
-need them.
+reconfigure devices, stop a camera recording, and reboot a camera or the whole console. Use a
+Local-Access-Only account with View Only rights, and leave writes off unless you need them.
 
 ## Configure
 
@@ -119,37 +119,37 @@ printf '%s\n' \
 
 20 read tools, plus 9 more when writes are enabled.
 
-| Tool                                              | What it does                                                                                        | Writes                 |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------- |
-| `unifi_protect_auth_status`                       | Log in and make a real call, reporting whether the console is reachable and on what Protect version | —                      |
-| `unifi_protect_auth_login`                        | Force a fresh login; the only way to supply a 2FA code                                              | —                      |
-| `unifi_protect_auth_logout`                       | Drop the cached session and delete the session file                                                 | confirm                |
-| `unifi_protect_get_system_info`                   | Console model, Protect version, storage, device counts                                              | —                      |
-| `unifi_protect_list_cameras`                      | Every camera, summarized                                                                            | —                      |
-| `unifi_protect_get_camera`                        | One camera's complete record (large)                                                                | —                      |
-| `unifi_protect_get_camera_snapshot`               | Capture a frame now, to a file or inline                                                            | —                      |
-| `unifi_protect_list_events`                       | **Search recorded events over any time range**                                                      | —                      |
-| `unifi_protect_get_event`                         | One event's full detection metadata                                                                 | —                      |
-| `unifi_protect_get_event_thumbnail`               | The frame that triggered a detection                                                                | —                      |
-| `unifi_protect_export_video`                      | Export footage as an MP4 on disk                                                                    | —                      |
-| `unifi_protect_list_lights`                       | Floodlights, with state and brightness                                                              | —                      |
-| `unifi_protect_list_sensors`                      | Sensors, with temperature / humidity / light readings                                               | —                      |
-| `unifi_protect_list_viewers`                      | Viewport devices and what each displays                                                             | —                      |
-| `unifi_protect_list_chimes`                       | Chimes, volume, paired doorbells                                                                    | —                      |
-| `unifi_protect_list_liveviews`                    | Saved camera grid layouts                                                                           | —                      |
-| `unifi_protect_list_users`                        | Who can sign in to Protect                                                                          | —                      |
-| `unifi_protect_request`                           | Escape hatch: call any private endpoint directly                                                    | GET only unless writes |
-| `unifi_protect_update_camera`                     | Name, mic, LED, OSD                                                                                 | ✅                     |
-| `unifi_protect_set_camera_recording_mode`         | `always` / `never` / `detections` / `schedule`                                                      | ✅                     |
-| `unifi_protect_ptz_goto_preset`                   | Point a PTZ camera at a preset                                                                      | ✅                     |
-| `unifi_protect_ptz_start_patrol` / `_stop_patrol` | Start / stop a patrol route                                                                         | ✅                     |
-| `unifi_protect_reboot_camera`                     | Reboot one camera                                                                                   | ✅ confirm             |
-| `unifi_protect_update_light`                      | Brightness, on/off, PIR sensitivity                                                                 | ✅                     |
-| `unifi_protect_update_sensor`                     | Name, which capabilities report                                                                     | ✅                     |
-| `unifi_protect_update_viewer`                     | Put a live view on a screen                                                                         | ✅                     |
-| `unifi_protect_update_chime`                      | Volume, name                                                                                        | ✅                     |
-| `unifi_protect_update_nvr_settings`               | Console name, timezone, global recording                                                            | ✅                     |
-| `unifi_protect_reboot_nvr`                        | Reboot the console                                                                                  | ✅ confirm             |
+| Tool                                      | What it does                                                                                        | Writes                 |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------- |
+| `unifi_protect_auth_status`               | Log in and make a real call, reporting whether the console is reachable and on what Protect version | —                      |
+| `unifi_protect_auth_login`                | Force a fresh login; the only way to supply a 2FA code                                              | —                      |
+| `unifi_protect_auth_logout`               | Drop the cached session and delete the session file                                                 | confirm                |
+| `unifi_protect_get_system_info`           | Console model, Protect version, storage, device counts                                              | —                      |
+| `unifi_protect_list_cameras`              | Every camera, summarized                                                                            | —                      |
+| `unifi_protect_get_camera`                | One camera's complete record (large)                                                                | —                      |
+| `unifi_protect_get_camera_snapshot`       | Capture a frame now, to a file or inline                                                            | —                      |
+| `unifi_protect_list_ptz_presets`          | A PTZ camera's saved preset slots                                                                   | —                      |
+| `unifi_protect_list_ptz_patrols`          | A PTZ camera's saved patrol routes                                                                  | —                      |
+| `unifi_protect_list_events`               | **Search recorded events over any time range**                                                      | —                      |
+| `unifi_protect_get_event`                 | One event's full detection metadata                                                                 | —                      |
+| `unifi_protect_get_event_thumbnail`       | The frame that triggered a detection                                                                | —                      |
+| `unifi_protect_export_video`              | Export footage as an MP4 on disk                                                                    | —                      |
+| `unifi_protect_list_lights`               | Floodlights, with state and brightness                                                              | —                      |
+| `unifi_protect_list_sensors`              | Sensors, with temperature / humidity / light readings                                               | —                      |
+| `unifi_protect_list_viewers`              | Viewport devices and what each displays                                                             | —                      |
+| `unifi_protect_list_chimes`               | Chimes, volume, paired doorbells                                                                    | —                      |
+| `unifi_protect_list_liveviews`            | Saved camera grid layouts                                                                           | —                      |
+| `unifi_protect_list_users`                | Who can sign in to Protect                                                                          | —                      |
+| `unifi_protect_request`                   | Escape hatch: call any private endpoint directly                                                    | GET only unless writes |
+| `unifi_protect_update_camera`             | Name, mic, status LED, OSD overlays                                                                 | ✅                     |
+| `unifi_protect_set_camera_recording_mode` | `always` / `never` / `detections` / `schedule`                                                      | ✅                     |
+| `unifi_protect_reboot_camera`             | Reboot one camera                                                                                   | ✅ confirm             |
+| `unifi_protect_update_light`              | Brightness, on/off, PIR sensitivity                                                                 | ✅                     |
+| `unifi_protect_update_sensor`             | Name, which capabilities report                                                                     | ✅                     |
+| `unifi_protect_update_viewer`             | Put a live view on a screen                                                                         | ✅                     |
+| `unifi_protect_update_chime`              | Volume, name                                                                                        | ✅                     |
+| `unifi_protect_update_nvr_settings`       | Console name, timezone, global recording                                                            | ✅                     |
+| `unifi_protect_reboot_nvr`                | Reboot the console                                                                                  | ✅ confirm             |
 
 ## Worked example: what happened at the front door last night
 
@@ -252,6 +252,26 @@ forbidden".
 **Storage shows as nearly full.** That is normal on an NVR: `isRecycling: true` means the
 console continuously overwrites the oldest footage rather than stopping. `get_system_info` says
 so inline so it does not read as a fault.
+
+## What has been verified against real hardware
+
+Built and exercised end-to-end against a live **UNVR4 on Protect 7.2.105** with 12 cameras, one
+floodlight and one chime. Every read tool was run; the write tools were exercised with _no-op_
+writes — each value set to the value it already held — and the device state read back unchanged
+afterwards. That run is also what caught three bugs this README's earlier drafts described
+wrongly: the storage layout, the event-thumbnail id, and two camera fields that do not exist.
+
+Two tools remain **unverified for want of hardware**, and are marked here rather than left to look
+tested:
+
+- `unifi_protect_update_sensor` — no UP Sense device on the test console (`sensors` is empty).
+  Note that a Protect **floodlight has its own built-in PIR**, reported as `isPirMotionDetected`
+  and tuned via `pirSensitivity`; that is part of the light, so it is `unifi_protect_update_light`
+  that controls it, not this tool. A garden lamp is not a sensor device.
+- `unifi_protect_update_viewer` — no Viewport device on the test console.
+
+Both follow the same PATCH shape as the tools that were verified, so they are likely correct, but
+"likely" is the honest word until someone runs them.
 
 ## Not implemented
 
