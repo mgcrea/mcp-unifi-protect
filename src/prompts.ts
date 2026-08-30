@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 const text = (body: string) => ({
@@ -71,7 +71,7 @@ export const registerPrompts = (server: McpServer): void => {
       // So: take the sentence as written, and let the model interpret it. It is
       // better at "this night in front of the house" than any parser here, and
       // the tools already accept local times and named locations directly.
-      argsSchema: {
+      argsSchema: z.object({
         query: z
           .string()
           .optional()
@@ -81,7 +81,7 @@ export const registerPrompts = (server: McpServer): void => {
               'house last night" arrives whole while the same words unquoted arrive as just ' +
               '"in". Leave empty for everything in the last 24 hours.',
           ),
-      },
+      }),
     },
     ({ query }) => {
       const asked = query?.trim();

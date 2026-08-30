@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import type { ProtectClient } from "#/client/protect";
@@ -29,7 +29,7 @@ export const registerDeviceTools = (
       description:
         "List UniFi Protect floodlights with their connection state, whether the light is " +
         "currently on, whether PIR motion is being detected, and brightness.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => wrap(async () => summarizeEach(await client.get("lights"), summarizeLight)),
@@ -44,7 +44,7 @@ export const registerDeviceTools = (
         "level — plus open/closed state, motion, and battery percentage. The readings are " +
         "lifted out of the console's per-metric history arrays, which are far larger than the " +
         "values themselves.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => wrap(async () => summarizeEach(await client.get("sensors"), summarizeSensor)),
@@ -56,7 +56,7 @@ export const registerDeviceTools = (
       title: "UniFi Protect: List Viewers",
       description:
         "List UniFi Protect Viewport devices and which live view each is currently displaying.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => wrap(async () => summarizeEach(await client.get("viewers"), summarizeViewer)),
@@ -68,7 +68,7 @@ export const registerDeviceTools = (
       title: "UniFi Protect: List Chimes",
       description:
         "List UniFi Protect chimes, their volume, and which doorbell cameras each is paired to.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => wrap(async () => summarizeEach(await client.get("chimes"), summarizeChime)),
@@ -84,7 +84,7 @@ export const registerDeviceTools = (
         "Change a floodlight's settings — brightness, whether the light is on, and the PIR " +
         "sensitivity that decides when it triggers. Only the fields you pass are sent, and the " +
         "console merges them, so the PIR duration and lux sensitivity you do not pass survive.",
-      inputSchema: {
+      inputSchema: z.object({
         lightId: idArg("Light", "unifi_protect_list_lights"),
         isLightOn: z.boolean().optional().describe("Turn the light on or off right now."),
         ledLevel: z
@@ -101,7 +101,7 @@ export const registerDeviceTools = (
           .max(100)
           .optional()
           .describe("Motion sensitivity, 0-100. Higher triggers on smaller movement."),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
     async ({ lightId, isLightOn, ledLevel, pirSensitivity }) =>
@@ -127,14 +127,14 @@ export const registerDeviceTools = (
       description:
         "Rename a sensor or change which of its capabilities are enabled. Only the fields you " +
         "pass are sent.",
-      inputSchema: {
+      inputSchema: z.object({
         sensorId: idArg("Sensor", "unifi_protect_list_sensors"),
         name: z.string().min(1).optional().describe("Display name for the sensor."),
         motionEnabled: z.boolean().optional().describe("Whether motion detection reports events."),
         temperatureEnabled: z.boolean().optional().describe("Whether temperature is reported."),
         humidityEnabled: z.boolean().optional().describe("Whether humidity is reported."),
         lightEnabled: z.boolean().optional().describe("Whether the light level is reported."),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
     async ({ sensorId, name, motionEnabled, temperatureEnabled, humidityEnabled, lightEnabled }) =>
@@ -166,7 +166,7 @@ export const registerDeviceTools = (
         "Put a saved live view on a Viewport screen, or rename the viewer. The liveview id " +
         "comes from unifi_protect_list_liveviews — this changes what is displayed on a physical " +
         "screen, so someone watching will see it switch.",
-      inputSchema: {
+      inputSchema: z.object({
         viewerId: idArg("Viewer", "unifi_protect_list_viewers"),
         liveview: z
           .string()
@@ -174,7 +174,7 @@ export const registerDeviceTools = (
           .optional()
           .describe("Live view id from unifi_protect_list_liveviews — the layout to display."),
         name: z.string().min(1).optional().describe("Display name for the viewer."),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
     async ({ viewerId, liveview, name }) =>
@@ -194,7 +194,7 @@ export const registerDeviceTools = (
       description:
         "Change a chime's volume or rename it. Volume 0 silences it, so a doorbell press will " +
         "make no sound.",
-      inputSchema: {
+      inputSchema: z.object({
         chimeId: idArg("Chime", "unifi_protect_list_chimes"),
         volume: z
           .number()
@@ -204,7 +204,7 @@ export const registerDeviceTools = (
           .optional()
           .describe("Volume, 0-100. 0 means the chime stays silent when the doorbell is pressed."),
         name: z.string().min(1).optional().describe("Display name for the chime."),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
     async ({ chimeId, volume, name }) =>

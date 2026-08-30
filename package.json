@@ -53,11 +53,12 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "undici": "^8.10.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "@types/node": "^26.2.0",
     "oxfmt": "^0.62.0",
     "oxlint": "^1.77.0",

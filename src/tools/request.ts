@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { WritesDisabledError } from "#/client/errors";
@@ -42,7 +42,7 @@ export const registerRequestTool = (
             "confirmation step here, so check the path before you call it."
           : "Writes are DISABLED: only GET is permitted. Set UNIFI_PROTECT_ALLOW_WRITES=1 to " +
             "allow mutations."),
-      inputSchema: {
+      inputSchema: z.object({
         path: z
           .string()
           .min(1)
@@ -62,7 +62,7 @@ export const registerRequestTool = (
           .record(z.string(), z.unknown())
           .optional()
           .describe("JSON request body, for POST and PATCH."),
-      },
+      }),
       annotations: { readOnlyHint: !allowWrites, destructiveHint: allowWrites },
     },
     async ({ path, method, query, body }) =>

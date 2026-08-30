@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import type { ProtectClient } from "#/client/protect";
@@ -28,7 +28,7 @@ export const registerSystemTools = (
         "system. The reported Protect version matters: this server talks to Protect's private " +
         "API, which Ubiquiti changes between releases, so a version that differs from the one " +
         "in the README is the first thing to check if a tool starts returning 404.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => wrap(async () => summarizeBootstrap(await client.get<Rec>("bootstrap"))),
@@ -41,7 +41,7 @@ export const registerSystemTools = (
       description:
         "List the accounts that can sign in to Protect, with their role and last login. Useful " +
         "for auditing who has access to the cameras.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => wrap(async () => summarizeEach(await client.get("users"), summarizeUser)),
@@ -55,7 +55,7 @@ export const registerSystemTools = (
         "List the saved live views — the named camera grid layouts shown on viewers and in the " +
         "Protect app. The returned id is what unifi_protect_update_viewer needs to put a layout " +
         "on a screen.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => wrap(async () => summarizeEach(await client.get("liveviews"), summarizeLiveview)),
@@ -71,7 +71,7 @@ export const registerSystemTools = (
         "Change console-wide settings. `isRecordingDisabled` is the significant one: turning it " +
         "on stops recording on EVERY camera at once, so nothing is written until it is turned " +
         "back off. Only the fields you pass are sent.",
-      inputSchema: {
+      inputSchema: z.object({
         name: z.string().min(1).optional().describe("Display name for the console."),
         timezone: z
           .string()
@@ -84,7 +84,7 @@ export const registerSystemTools = (
           .describe(
             "Disable recording across every camera. True means no footage is kept, system-wide.",
           ),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
     async ({ name, timezone, isRecordingDisabled }) =>
@@ -109,7 +109,7 @@ export const registerSystemTools = (
         "network if the console is your router (a UDM or UDM Pro), taking down everything behind " +
         "it. Reboot a single unresponsive camera with unifi_protect_reboot_camera instead " +
         "wherever that would do.",
-      inputSchema: { confirm: confirmArg },
+      inputSchema: z.object({ confirm: confirmArg }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     async () => wrap(() => client.post("nvr/reboot")),

@@ -1,5 +1,4 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { staticSessionProvider } from "#/client/auth";
@@ -561,7 +560,12 @@ describe("resources and prompts", () => {
       username: undefined,
       password: undefined,
     });
-    await expect(client.listResources()).rejects.toThrow();
+    // Assert the server's own contract rather than the client's reaction to it:
+    // under SDK v2 the list verbs short-circuit to an empty result when the
+    // capability was never advertised, instead of throwing as they did in v1.
+    const capabilities = client.getServerCapabilities();
+    expect(capabilities?.resources).toBeUndefined();
+    expect(capabilities?.prompts).toBeUndefined();
   });
 
   it("renders every prompt with NO arguments at all", async () => {

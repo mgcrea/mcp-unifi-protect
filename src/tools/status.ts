@@ -1,6 +1,6 @@
 import { statSync } from "node:fs";
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import type { ProtectClient } from "#/client/protect";
@@ -33,7 +33,7 @@ export const registerStatusTools = (
         "when nothing is configured it returns the exact setup steps instead. Call this first " +
         "when a tool you expected is not listed: an absent tool means missing configuration or " +
         "writes being off, not a bug.",
-      inputSchema: {
+      inputSchema: z.object({
         probe: z
           .boolean()
           .default(true)
@@ -41,7 +41,7 @@ export const registerStatusTools = (
             "Actually contact the console (logging in if needed) rather than only reporting " +
               "what is already cached. Set false for a fast, purely local answer.",
           ),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ probe }) =>
@@ -164,13 +164,13 @@ export const registerStatusTools = (
         "supply a two-factor code, which cannot be done unattended: the code is single-use and " +
         "expires in about 30 seconds, so it is passed here once and the resulting session is " +
         "then cached and reused.",
-      inputSchema: {
+      inputSchema: z.object({
         totp: z
           .string()
           .regex(/^\d{6,8}$/, "A two-factor code is 6 to 8 digits.")
           .optional()
           .describe("Current code from your authenticator app. Omit if the account has no 2FA."),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     async ({ totp }) =>
@@ -194,7 +194,7 @@ export const registerStatusTools = (
         "Drop the cached session and delete the session file. The next call logs in again from " +
         "the configured username and password, so this does not lock anything out — use it to " +
         "clear a session after changing accounts, or to remove the cookie from disk.",
-      inputSchema: { confirm: confirmArg },
+      inputSchema: z.object({ confirm: confirmArg }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     async () =>

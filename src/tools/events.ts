@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { detectionWarnings } from "#/client/detection";
@@ -95,7 +95,7 @@ export const registerEventTools = (
         "which is not the same as nothing having happened, and this tool says which case it " +
         "is. Narrow with `types`, `smartDetectTypes` and `cameraIds` wherever you can: a busy " +
         "system logs thousands of motion events a day.",
-      inputSchema: {
+      inputSchema: z.object({
         start: timeArg("Beginning of the search window."),
         end: timeArg("End of the search window."),
         types: z
@@ -141,7 +141,7 @@ export const registerEventTools = (
           .enum(["newest", "oldest"])
           .default("newest")
           .describe("Which end of the window to return first."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ start, end, types, smartDetectTypes, cameraId, cameraIds, location, limit, order }) =>
@@ -278,9 +278,9 @@ export const registerEventTools = (
         "Get one event's full record, including detection metadata the search results leave " +
         "out — per-object tracking, detected zones, licence plate text and vehicle attributes " +
         "where the camera captured them. Use the `id` from unifi_protect_list_events.",
-      inputSchema: {
+      inputSchema: z.object({
         eventId: z.string().min(1).describe("Event id — the `id` from unifi_protect_list_events."),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ eventId }) => wrap(() => client.get(`events/${encodeURIComponent(eventId)}`)),
@@ -296,7 +296,7 @@ export const registerEventTools = (
         "return it inline for a vision model to look at, which costs a large amount of context. " +
         "Pass the event's `id` from unifi_protect_list_events; results showing " +
         "`hasThumbnail: true` have one.",
-      inputSchema: {
+      inputSchema: z.object({
         eventId: z
           .string()
           .min(1)
@@ -316,7 +316,7 @@ export const registerEventTools = (
             "Absolute path to write the JPEG to. Defaults to a file under " +
               "UNIFI_PROTECT_SNAPSHOT_DIR. Parent directories are created.",
           ),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ eventId, output, savePath }) =>
@@ -363,7 +363,7 @@ export const registerEventTools = (
         "it is capped at 6 — pick the events worth seeing from unifi_protect_list_events " +
         "rather than sweeping a whole night. Events that have no thumbnail are reported by id " +
         "instead of failing the call.",
-      inputSchema: {
+      inputSchema: z.object({
         eventIds: z
           .array(z.string().min(1))
           .min(1)
@@ -379,7 +379,7 @@ export const registerEventTools = (
             '"image" returns the frames inline for a vision model to look at, which is the ' +
               'point of this tool; "file" writes them to disk and returns paths instead.',
           ),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ eventIds, output }) =>
@@ -443,7 +443,7 @@ export const registerEventTools = (
         "and the call fails rather than exhausting memory if the export exceeds " +
         "UNIFI_PROTECT_MAX_DOWNLOAD_BYTES. Footage only exists if the camera was recording at " +
         "the time, so check the recording mode before concluding that nothing happened.",
-      inputSchema: {
+      inputSchema: z.object({
         cameraId: cameraIdArg,
         start: requiredTimeArg("Beginning of the footage to export."),
         end: requiredTimeArg("End of the footage to export."),
@@ -464,7 +464,7 @@ export const registerEventTools = (
             "Encoder channel: 0 is the high-quality stream, higher numbers are progressively " +
               "lower bitrate. Use a higher channel to keep a long export manageable.",
           ),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ cameraId, start, end, savePath, channel }) =>

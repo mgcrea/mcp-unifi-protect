@@ -1,4 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import { z } from "zod";
 
 import { cameraFacts, type CameraFacts } from "#/client/detection";
 import type { ProtectClient } from "#/client/protect";
@@ -187,7 +188,7 @@ export const registerAuditTools = (
         "Protect UI, notably a detection zone asking for an object type the device list " +
         "blocks. Read-only: it reports findings and names the tool that would fix each one, " +
         "and changes nothing.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () =>

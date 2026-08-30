@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { cameraFacts, GATED_OBJECT_TYPES } from "#/client/detection";
@@ -36,7 +36,7 @@ export const registerCameraTools = (
         "types it detects). Returns a summary rather than the console's full camera record, " +
         "which runs to thousands of fields across encoder profiles, zones and feature flags — " +
         "use unifi_protect_get_camera when you need all of it for one camera.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: { readOnlyHint: true },
     },
     async () => wrap(async () => summarizeEach(await client.get("cameras"), summarizeCamera)),
@@ -51,7 +51,7 @@ export const registerCameraTools = (
         "channels, motion and smart-detection zones, privacy masks, OSD and LED settings, ISP " +
         "tuning and live statistics. This is large (roughly 8-15 KB of JSON). Prefer " +
         "unifi_protect_list_cameras unless you specifically need a field it does not carry.",
-      inputSchema: { cameraId: cameraIdArg },
+      inputSchema: z.object({ cameraId: cameraIdArg }),
       annotations: { readOnlyHint: true },
     },
     async ({ cameraId }) => wrap(() => client.get(`cameras/${encodeURIComponent(cameraId)}`)),
@@ -68,7 +68,7 @@ export const registerCameraTools = (
         "300,000 to 700,000 characters of context per call, so choose it deliberately rather " +
         "than by default. A fresh capture is forced; without that the console can hand back a " +
         "cached frame that is minutes old.",
-      inputSchema: {
+      inputSchema: z.object({
         cameraId: cameraIdArg,
         output: z
           .enum(["file", "image"])
@@ -92,7 +92,7 @@ export const registerCameraTools = (
             "Absolute path to write the JPEG to. Defaults to a timestamped file under " +
               "UNIFI_PROTECT_SNAPSHOT_DIR. Parent directories are created.",
           ),
-      },
+      }),
       annotations: { readOnlyHint: true },
     },
     async ({ cameraId, output, highQuality, savePath }) =>
@@ -153,7 +153,7 @@ export const registerCameraTools = (
         "Ubiquiti's official Integration API (a separate X-API-KEY auth this server does not " +
         "use), not on the private API this server wraps — presets are created and driven from " +
         "the Protect app itself.",
-      inputSchema: { cameraId: cameraIdArg },
+      inputSchema: z.object({ cameraId: cameraIdArg }),
       annotations: { readOnlyHint: true },
     },
     async ({ cameraId }) =>
@@ -167,7 +167,7 @@ export const registerCameraTools = (
       description:
         "List a PTZ camera's saved patrol routes. See unifi_protect_list_ptz_presets for why " +
         "there is no tool to start or stop one.",
-      inputSchema: { cameraId: cameraIdArg },
+      inputSchema: z.object({ cameraId: cameraIdArg }),
       annotations: { readOnlyHint: true },
     },
     async ({ cameraId }) =>
@@ -186,7 +186,7 @@ export const registerCameraTools = (
         "setting osdDate alone does not clear osdName. Use " +
         "unifi_protect_set_camera_recording_mode for recording mode alone — it is the setting " +
         "people mean most often and it is easy to send wrongly here.",
-      inputSchema: {
+      inputSchema: z.object({
         cameraId: cameraIdArg,
         name: z.string().min(1).optional().describe("Display name shown throughout Protect."),
         micVolume: z
@@ -206,7 +206,7 @@ export const registerCameraTools = (
           .describe("Whether the camera's status LED lights up at all."),
         osdName: z.boolean().optional().describe("Overlay the camera name on the video."),
         osdDate: z.boolean().optional().describe("Overlay the date and time on the video."),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
     async ({ cameraId, name, micVolume, isMicEnabled, statusLedEnabled, osdName, osdDate }) =>
@@ -244,7 +244,7 @@ export const registerCameraTools = (
         "error. Pass objectTypes to set the device list, and leave syncZones true so the zones " +
         "are brought into line rather than left making a promise the device does not keep. " +
         "Values the camera does not support are rejected by name rather than silently dropped.",
-      inputSchema: {
+      inputSchema: z.object({
         cameraId: cameraIdArg,
         objectTypes: z
           .array(z.enum(GATED_OBJECT_TYPES))
@@ -271,7 +271,7 @@ export const registerCameraTools = (
               "asking for a type the device list blocks is the misconfiguration this tool " +
               "exists to prevent.",
           ),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
     async ({ cameraId, objectTypes, audioTypes, syncZones }) =>
@@ -365,7 +365,7 @@ export const registerCameraTools = (
         "and streams live, but nothing is written, so there will be no footage to search later. " +
         "`detections` records only motion and smart detections; `always` records continuously; " +
         "`schedule` follows the schedule configured in Protect.",
-      inputSchema: {
+      inputSchema: z.object({
         cameraId: cameraIdArg,
         mode: z
           .enum(RECORDING_MODES)
@@ -373,7 +373,7 @@ export const registerCameraTools = (
             "Recording mode. `never` means no footage is kept from now on — this is the one " +
               "worth pausing over.",
           ),
-      },
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
     async ({ cameraId, mode }) =>
@@ -393,7 +393,7 @@ export const registerCameraTools = (
       description:
         "Reboot a camera. It stops recording and goes offline for roughly a minute, and any " +
         "footage during that window is lost. Useful for a camera that has stopped responding.",
-      inputSchema: { cameraId: cameraIdArg, confirm: confirmArg },
+      inputSchema: z.object({ cameraId: cameraIdArg, confirm: confirmArg }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     async ({ cameraId }) =>
