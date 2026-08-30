@@ -12,6 +12,8 @@ import { calledInit, calledUrl, fetchMock, type FetchLike } from "./helpers.js";
 let sessionFile: string;
 
 const config = (overrides: Partial<Config> = {}): Config => ({
+  mode: "local",
+  modeSource: "default",
   baseUrl: "https://192.168.1.1",
   username: "mcp",
   password: "secret",

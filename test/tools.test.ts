@@ -5,9 +5,11 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { staticSessionProvider } from "../src/client/auth.js";
 import type { Config } from "../src/config.js";
 import { createServer } from "../src/server.js";
-import { calledInit } from "./helpers.js";
+import { calledInit, calledUrl, fetchMock } from "./helpers.js";
 
 const baseConfig: Config = {
+  mode: "local",
+  modeSource: "default",
   baseUrl: "https://192.168.1.1",
   username: "mcp",
   password: "secret",
@@ -232,6 +234,67 @@ describe("tool registration", () => {
       expect(tool.annotations, tool.name).toBeDefined();
       expect(tool.annotations?.readOnlyHint, tool.name).toBeTypeOf("boolean");
     }
+  });
+});
+
+describe("cloud mode", () => {
+  const cloudConfig: Config = {
+    ...baseConfig,
+    mode: "cloud",
+    modeSource: "explicit",
+    baseUrl: undefined,
+    username: undefined,
+    password: undefined,
+    consoleId: "ABC123:456",
+    apiKey: "sekret-key",
+  };
+
+  it("addresses the console through the Site Manager connector, with the api key", async () => {
+    // The connector forwards the PRIVATE api, not only the official Integration
+    // API — verified against a live console. So the paths are identical to
+    // local mode and only the origin and the auth header differ.
+    const fetchImpl = vi.fn(async () => jsonResponse([]));
+    const { server, client } = createServer({
+      config: cloudConfig,
+      fetch: fetchImpl as unknown as typeof fetch,
+    });
+    void server;
+    await client.get("cameras");
+
+    expect(calledUrl(fetchImpl)).toBe(
+      "https://api.ui.com/v1/connector/consoles/ABC123:456/proxy/protect/api/cameras",
+    );
+    const init = calledInit<{ headers: Record<string, string> }>(fetchImpl);
+    expect(init.headers["x-api-key"]).toBe("sekret-key");
+    // No login happened: there is no cookie and no CSRF token to send.
+    expect(init.headers.cookie).toBeUndefined();
+    expect(init.headers["x-csrf-token"]).toBeUndefined();
+  });
+
+  it("never logs in, so a 401 is not retried into a re-auth loop", async () => {
+    // A 401 from the connector means a wrong key or a console outside the
+    // key's org. Re-authenticating cannot fix either, and retrying would just
+    // multiply the failure.
+    const fetchImpl = fetchMock(async () => jsonResponse({ error: "unauthorized" }, 401));
+    const { client } = createServer({
+      config: { ...cloudConfig, maxRetries: 2 },
+      fetch: fetchImpl as unknown as typeof fetch,
+    });
+    await expect(client.get("cameras")).rejects.toThrow();
+    // Only the transport's own retries; no extra login round-trips.
+    for (let i = 0; i < fetchImpl.mock.calls.length; i += 1) {
+      expect(calledUrl(fetchImpl, i)).toContain("/proxy/protect/api/");
+    }
+  });
+
+  it("registers the same tools as local mode, minus the login pair", async () => {
+    // Identical surface everywhere it matters — but auth_login and auth_logout
+    // would be lies here: there is no session to establish or discard.
+    const names = await toolNames(await connect(cloudConfig));
+    const expected = READ_TOOLS.filter(
+      (n) => n !== "unifi_protect_auth_login" && n !== "unifi_protect_auth_logout",
+    ).toSorted();
+    expect(names).toEqual(expected);
   });
 });
 

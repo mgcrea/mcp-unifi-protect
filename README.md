@@ -19,6 +19,53 @@ at all unless you ask for them.
 - **Stays up with no credentials**, reporting what to configure through `unifi_protect_auth_status`
   rather than exiting and showing in your client as a bare `Connection closed`.
 
+## Two ways to connect
+
+|                       | `local` (default)                            | `cloud`                                 |
+| --------------------- | -------------------------------------------- | --------------------------------------- |
+| Reaches the console   | directly on your LAN                         | via `api.ui.com` Site Manager connector |
+| Credentials           | host + username + password                   | API key + console id                    |
+| Auth mechanism        | UniFi OS login → session cookie + CSRF token | `X-API-KEY` header                      |
+| TLS                   | console's self-signed cert — needs setup     | a real certificate, nothing to do       |
+| Works off-LAN         | no                                           | yes                                     |
+| Session state on disk | yes, mode `600`                              | none                                    |
+
+**Both modes expose exactly the same tools**, because both speak the same private
+Protect API — the connector forwards the whole `/proxy/protect/...` tree, the private
+API included. That is not obvious and is worth stating plainly: Ubiquiti's _official_
+Integration API has no historical query capability whatsoever, so if the connector only
+carried that, cloud mode could not answer a single question about the past. It carries
+the private API too, verified against a live console — `bootstrap`, `events`, `cameras`
+and binary snapshots all answer `200`.
+
+So cloud mode is a full alternative, not a reduced one, and it removes the local
+account, the password, the session file, the CSRF handshake and the self-signed
+certificate problem in one go.
+
+```bash
+# cloud — no local account at all
+UNIFI_PROTECT_API_KEY=…        # unifi.ui.com → Settings → API Keys
+UNIFI_PROTECT_CONSOLE_ID=…     # curl -H "X-API-KEY: $KEY" https://api.ui.com/v1/hosts
+
+# local — on the LAN
+UNIFI_PROTECT_HOST=192.168.1.1
+UNIFI_PROTECT_USERNAME=mcp
+UNIFI_PROTECT_PASSWORD=…
+UNIFI_PROTECT_VERIFY_TLS=false
+```
+
+`UNIFI_PROTECT_MODE` is inferred as `cloud` when an API key and a console id are both
+set, so it usually needs no setting. `console`/`unifios`/`lan` and
+`remote`/`site-manager`/`connector` are accepted as synonyms, and an unrecognised value
+is reported through `unifi_protect_auth_status` rather than killing the server.
+
+**Two traps in cloud mode.** A key that works for `/v1/hosts` can still return
+`403 user cannot access host in the organization` for a console outside the
+organization it was issued in — valid key, wrong org, and the message reads nothing like
+a credentials problem. And API keys are **per-console**: a key created on your Network
+gateway does not authenticate against the NVR running Protect, and the NVR rejects it
+exactly as it rejects a made-up key.
+
 ## Security
 
 **Supply chain.** Three runtime dependencies: the MCP SDK, zod, and `undici`. Retry and backoff
@@ -240,6 +287,17 @@ whereas a refused one invites an agent to keep trying.
 **`self-signed certificate` errors.** Verification is on by default and cannot pass against an IP address. Either address the console by name with `NODE_EXTRA_CA_CERTS` set, or `UNIFI_PROTECT_VERIFY_TLS=false`
 unless you have installed a trusted certificate on the console.
 
+**Cloud mode returns 403 `user cannot access host in the organization`.** The key is
+valid but was issued in an organization that does not contain that console. Check the
+console appears in `curl -H "X-API-KEY: $KEY" https://api.ui.com/v1/hosts`; if the web
+dashboard shows it but that call does not, they are different organizations.
+
+**A local API key returns 401 on everything.** API keys are per-console. A key created
+on your Network gateway is not valid on the NVR running Protect — and the NVR rejects an
+unknown key with exactly the same `401` it gives a fabricated one, so the message cannot
+distinguish "wrong console" from "wrong key". Create the key on the console you are
+addressing, or use cloud mode.
+
 **Everything returns 401.** Check the account is a local one, and that it has Protect
 permissions. `unifi_protect_auth_status` distinguishes "cannot log in" from "logged in but
 forbidden".
@@ -255,7 +313,12 @@ so inline so it does not read as a fault.
 
 ## What has been verified against real hardware
 
-Built and exercised end-to-end against a live **UNVR4 on Protect 7.2.105** with 12 cameras, one
+**Cloud mode** was verified end-to-end against a live console over the Site Manager
+connector: `auth_status` reachable, camera list, and event search returning real
+detections with their camera names resolved — all authenticated by an API key alone,
+with no local account anywhere in the picture.
+
+**Local mode** was built and exercised end-to-end against a live **UNVR4 on Protect 7.2.105** with 12 cameras, one
 floodlight and one chime. Every read tool was run; the write tools were exercised with _no-op_
 writes — each value set to the value it already held — and the device state read back unchanged
 afterwards. That run is also what caught three bugs this README's earlier drafts described

@@ -1,11 +1,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { BUILD_INFO } from "./build-info.js";
-import { createSessionProvider, type Logger, type SessionProvider } from "./client/auth.js";
+import {
+  apiKeySessionProvider,
+  createSessionProvider,
+  type Logger,
+  type SessionProvider,
+} from "./client/auth.js";
 import { createDeviceCache, type DeviceCache } from "./client/device-cache.js";
 import { ProtectClient } from "./client/protect.js";
 import { createHttpFetch } from "./client/tls.js";
-import type { Config } from "./config.js";
+import { consoleOrigin, type Config } from "./config.js";
 import { registerTools } from "./tools/index.js";
 
 export const SERVER_NAME = BUILD_INFO.name;
@@ -37,23 +42,30 @@ export const createServer = (opts: CreateServerOptions): CreatedServer => {
   const fetchImpl =
     opts.fetch ??
     createHttpFetch({
-      insecureTls: !config.verifyTls,
+      // api.ui.com presents a valid certificate, so relaxing verification in
+      // cloud mode would remove protection and gain nothing. The flag exists
+      // for a self-signed console on the LAN and applies only there.
+      insecureTls: config.mode !== "cloud" && !config.verifyTls,
       ...(opts.logger ? { logger: opts.logger } : {}),
     });
 
+  // Cloud mode needs no login: the Site Manager connector authenticates each
+  // request from the API key, so the whole cookie/CSRF handshake is skipped.
   const session =
     opts.session ??
-    createSessionProvider({
-      config,
-      fetch: fetchImpl,
-      ...(opts.logger ? { logger: opts.logger } : {}),
-    });
+    (config.mode === "cloud" && config.apiKey
+      ? apiKeySessionProvider(config.apiKey)
+      : createSessionProvider({
+          config,
+          fetch: fetchImpl,
+          ...(opts.logger ? { logger: opts.logger } : {}),
+        }));
 
   const client = new ProtectClient({
     // An unconfigured server still constructs a client, so createServer stays
     // total. No tool that could use it is registered, and the session provider
     // throws a message naming the fix if something ever reaches it anyway.
-    baseUrl: config.baseUrl ?? "https://unconfigured.invalid",
+    baseUrl: consoleOrigin(config) ?? "https://unconfigured.invalid",
     session,
     maxRetries: config.maxRetries,
     userAgent: USER_AGENT,

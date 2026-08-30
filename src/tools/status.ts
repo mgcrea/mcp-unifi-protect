@@ -49,6 +49,7 @@ export const registerStatusTools = (
         if (!configured) {
           return {
             configured: false,
+            mode: ctx.config.mode,
             host: ctx.config.baseUrl ?? null,
             available_without_credentials: ["unifi_protect_auth_status"],
             setup: setupInstructions(ctx.config),
@@ -82,7 +83,17 @@ export const registerStatusTools = (
         const mode = fileMode(ctx.config.sessionFile);
         return {
           configured: true,
-          host: ctx.config.baseUrl,
+          mode: ctx.config.mode,
+          ...(ctx.config.modeSource === "invalid"
+            ? { modeWarning: `UNIFI_PROTECT_MODE was not recognised; assumed ${ctx.config.mode}.` }
+            : {}),
+          ...(ctx.config.mode === "cloud"
+            ? {
+                via: "api.ui.com Site Manager connector",
+                consoleId: ctx.config.consoleId,
+              }
+            : {}),
+          host: ctx.config.baseUrl ?? null,
           username: status.username ?? null,
           ...(probe
             ? {
@@ -91,24 +102,38 @@ export const registerStatusTools = (
                 ...(failure ? { failure } : {}),
               }
             : {}),
-          session: {
-            authenticated: status.authenticated,
-            // "restored" means it came from disk and has not been proven yet —
-            // the first real call is what confirms it, via a 401 and re-login
-            // if the cookie has expired.
-            source: status.source,
-            established_at: status.savedAt ?? null,
-            file: ctx.config.sessionFile,
-            file_mode: mode === undefined ? "absent" : `0${mode.toString(8)}`,
-            ...(mode !== undefined && (mode & 0o077) !== 0
-              ? { warning: `Readable by other users. Run: chmod 600 ${ctx.config.sessionFile}` }
-              : {}),
-          },
-          tls: ctx.config.verifyTls
-            ? "verified"
-            : "UNVERIFIED — certificate checks are off for this server's requests only. " +
-              "Verifying needs both NODE_EXTRA_CA_CERTS pointing at the console certificate and " +
-              "UNIFI_PROTECT_HOST set to a host name: the certificate carries no IP SAN.",
+          session:
+            ctx.config.mode === "cloud"
+              ? {
+                  // Cloud mode holds no session: the connector authenticates
+                  // every request from the API key, so there is nothing cached
+                  // and no file on disk.
+                  authenticated: status.authenticated,
+                  source: status.source,
+                }
+              : {
+                  authenticated: status.authenticated,
+                  // "restored" means it came from disk and has not been proven
+                  // yet — the first real call is what confirms it, via a 401
+                  // and re-login if the cookie has expired.
+                  source: status.source,
+                  established_at: status.savedAt ?? null,
+                  file: ctx.config.sessionFile,
+                  file_mode: mode === undefined ? "absent" : `0${mode.toString(8)}`,
+                  ...(mode !== undefined && (mode & 0o077) !== 0
+                    ? {
+                        warning: `Readable by other users. Run: chmod 600 ${ctx.config.sessionFile}`,
+                      }
+                    : {}),
+                },
+          tls:
+            ctx.config.mode === "cloud"
+              ? "verified (api.ui.com presents a real certificate; the console's self-signed one is never seen)"
+              : ctx.config.verifyTls
+                ? "verified"
+                : "UNVERIFIED — certificate checks are off for this server's requests only. " +
+                  "Verifying needs both NODE_EXTRA_CA_CERTS pointing at the console certificate and " +
+                  "UNIFI_PROTECT_HOST set to a host name: the certificate carries no IP SAN.",
           writes: ctx.allowWrites ? "enabled" : "disabled",
           api:
             "private (undocumented). Ubiquiti moves these endpoints between Protect releases, so " +
@@ -118,9 +143,11 @@ export const registerStatusTools = (
       }),
   );
 
-  // The login tools are pointless without a console to log in to, so they do not
-  // exist at all until one is configured.
-  if (!isConfigured(ctx.config)) return;
+  // The login tools are pointless without a console to log in to, so they do
+  // not exist until one is configured — and they are meaningless in cloud mode,
+  // where the connector authenticates every request from the API key and there
+  // is no session to establish, cache or discard.
+  if (!isConfigured(ctx.config) || ctx.config.mode === "cloud") return;
 
   server.registerTool(
     "unifi_protect_auth_login",

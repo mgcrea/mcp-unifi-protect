@@ -25,10 +25,67 @@ export const LOGIN_PATH = "/api/auth/login";
 /** The realtime channel. Not used yet — see the WebSocket note in the README. */
 export const UPDATES_WS_PATH = "/proxy/protect/ws/updates";
 
+/**
+ * How this server reaches the console.
+ *
+ * `local` talks to the console on your LAN and authenticates the way the
+ * Protect web app does: a UniFi OS login yielding a session cookie and a CSRF
+ * token.
+ *
+ * `cloud` goes through Ubiquiti's Site Manager connector at api.ui.com, which
+ * forwards to the same console and authenticates with nothing but an API key.
+ *
+ * The connector proxies the PRIVATE Protect API, not merely the official
+ * Integration API — verified against a live console: bootstrap, event search,
+ * camera list and binary snapshots all answer 200 through it. That is what
+ * makes cloud mode a genuine alternative rather than a reduced one; the
+ * official Integration API on its own cannot answer any question about the
+ * past, so it could never have replaced a local login.
+ */
+export const MODES = ["local", "cloud"] as const;
+export type Mode = (typeof MODES)[number];
+
+const CLOUD_BASE = "https://api.ui.com/v1/connector/consoles";
+
+/**
+ * What people actually type. Rejecting a reasonable synonym is a self-inflicted
+ * support question, and these are the words the other UniFi servers accept.
+ */
+const MODE_ALIASES: Record<string, Mode> = {
+  console: "local",
+  unifios: "local",
+  "unifi-os": "local",
+  unifi_os: "local",
+  os: "local",
+  lan: "local",
+  remote: "cloud",
+  "site-manager": "cloud",
+  sitemanager: "cloud",
+  connector: "cloud",
+};
+
+/** Resolve a user-supplied mode, accepting the common synonyms. */
+export const normalizeMode = (value: string): Mode | undefined => {
+  const key = value.trim().toLowerCase();
+  if ((MODES as readonly string[]).includes(key)) return key as Mode;
+  return MODE_ALIASES[key];
+};
+
 const ConfigSchema = z
   .object({
-    /** Console origin, e.g. `https://192.168.1.1` or `https://10.0.0.1:8443`. */
+    mode: z.enum(MODES).default("local"),
+    /**
+     * Derived, never user-set. `mode` has a default, so its value alone cannot
+     * tell you whether the user chose it — which matters when explaining why a
+     * credential was ignored.
+     */
+    modeSource: z.enum(["explicit", "inferred", "default", "invalid"]).default("default"),
+    /** Console origin, e.g. `https://192.168.1.1` or `https://10.0.0.1:8443`. Local mode. */
     baseUrl: z.string().min(1).optional(),
+    /** Site Manager console id, from `GET https://api.ui.com/v1/hosts`. Cloud mode. */
+    consoleId: z.string().min(1).optional(),
+    /** Site Manager API key, created at unifi.ui.com. Cloud mode. */
+    apiKey: z.string().min(1).optional(),
     username: z.string().min(1).optional(),
     password: z.string().min(1).optional(),
     /**
@@ -64,9 +121,31 @@ const ConfigSchema = z
     // have explained what to set never reaches anyone. The server stays up,
     // registers unifi_protect_auth_status, and reports the gap as data.
     //
-    // A half-configured install IS worth flagging, though: a host with no
-    // password is a typo, not a deliberate state, and saying so beats letting
+    // A half-configured install IS worth flagging, though: a credential with no
+    // partner is a typo, not a deliberate state, and saying so beats letting
     // every call fail with an auth error that reads like a wrong password.
+    if (cfg.mode === "cloud") {
+      if (cfg.apiKey && !cfg.consoleId) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["consoleId"],
+          message:
+            "Cloud mode has no console to address. Set UNIFI_PROTECT_CONSOLE_ID — list yours " +
+            'with: curl -H "X-API-KEY: $UNIFI_PROTECT_API_KEY" https://api.ui.com/v1/hosts',
+        });
+      }
+      if (cfg.consoleId && !cfg.apiKey) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["apiKey"],
+          message:
+            "UNIFI_PROTECT_CONSOLE_ID is set but UNIFI_PROTECT_API_KEY is not. Create a key at " +
+            "unifi.ui.com → Settings → API Keys.",
+        });
+      }
+      return;
+    }
+
     if (cfg.baseUrl && !cfg.username) {
       ctx.addIssue({
         code: "custom",
@@ -97,7 +176,10 @@ export type Config = z.infer<typeof ConfigSchema>;
  */
 const FileConfigSchema = z
   .object({
+    mode: z.enum(MODES).optional(),
     host: z.string().min(1).optional(),
+    consoleId: z.string().min(1).optional(),
+    apiKey: z.string().min(1).optional(),
     username: z.string().min(1).optional(),
     password: z.string().min(1).optional(),
     verifyTls: z.boolean().optional(),
@@ -232,11 +314,41 @@ const readConfigFile = (path: string): FileConfig => {
  * one-off `UNIFI_PROTECT_ALLOW_WRITES=0` still has to override a file that says
  * `true`. Merging field by field is the only rule that gives both.
  */
+/**
+ * Pick the mode from whichever credentials are present when none was named.
+ * An explicit UNIFI_PROTECT_MODE always wins.
+ *
+ * An unrecognised mode is deliberately NOT a throw: exiting over a typo is the
+ * failure this whole server is built to avoid, and the client would show only
+ * "Connection closed". The server comes up on the inferred mode and
+ * unifi_protect_auth_status reports that the value was not understood.
+ */
+const resolveMode = (
+  env: NodeJS.ProcessEnv,
+  file: FileConfig,
+): { mode: Mode; source: Config["modeSource"]; invalidMode?: string } => {
+  const infer = (): Mode =>
+    (trimmed(env.UNIFI_PROTECT_API_KEY) ?? file.apiKey) &&
+    (trimmed(env.UNIFI_PROTECT_CONSOLE_ID) ?? file.consoleId)
+      ? "cloud"
+      : "local";
+
+  const explicit = trimmed(env.UNIFI_PROTECT_MODE) ?? file.mode;
+  if (explicit) {
+    const resolved = normalizeMode(explicit);
+    if (resolved) return { mode: resolved, source: "explicit" };
+    return { mode: infer(), source: "invalid", invalidMode: explicit };
+  }
+  const inferred = infer();
+  return { mode: inferred, source: inferred === "cloud" ? "inferred" : "default" };
+};
+
 export const loadConfig = (
   env: NodeJS.ProcessEnv = process.env,
   configPath: string = resolveConfigPath(env),
 ): Config => {
   const file = readConfigFile(configPath);
+  const { mode, source } = resolveMode(env, file);
   const host = trimmed(env.UNIFI_PROTECT_HOST) ?? file.host;
   const sessionFile =
     trimmed(env.UNIFI_PROTECT_SESSION_FILE) ?? file.sessionFile ?? resolveSessionPath(env);
@@ -246,7 +358,11 @@ export const loadConfig = (
     join(homedir(), ".cache", "unifi-protect");
 
   return ConfigSchema.parse({
+    mode,
+    modeSource: source,
     baseUrl: host ? normalizeBaseUrl(host) : undefined,
+    consoleId: trimmed(env.UNIFI_PROTECT_CONSOLE_ID) ?? file.consoleId,
+    apiKey: trimmed(env.UNIFI_PROTECT_API_KEY) ?? file.apiKey,
     username: trimmed(env.UNIFI_PROTECT_USERNAME) ?? file.username,
     password: trimmed(env.UNIFI_PROTECT_PASSWORD) ?? file.password,
     totp: trimmed(env.UNIFI_PROTECT_TOTP),
@@ -261,9 +377,24 @@ export const loadConfig = (
   });
 };
 
+/**
+ * The origin every private-API request is built on. Cloud mode addresses the
+ * console through the Site Manager connector, which forwards the whole
+ * `/proxy/protect/...` tree — the private API included — so both modes share
+ * one client and one set of paths.
+ */
+export const consoleOrigin = (config: Config): string | undefined => {
+  if (config.mode === "cloud") {
+    return config.consoleId ? `${CLOUD_BASE}/${config.consoleId}` : undefined;
+  }
+  return config.baseUrl;
+};
+
 /** True once the server has everything it needs to reach a console. */
 export const isConfigured = (config: Config): boolean =>
-  Boolean(config.baseUrl && config.username && config.password);
+  config.mode === "cloud"
+    ? Boolean(config.consoleId && config.apiKey)
+    : Boolean(config.baseUrl && config.username && config.password);
 
 /**
  * Returned by unifi_protect_auth_status and printed to stderr at startup. Prose
@@ -272,14 +403,42 @@ export const isConfigured = (config: Config): boolean =>
  */
 export const setupInstructions = (config: Config): string[] => {
   if (isConfigured(config)) return [];
+
+  const modeNote =
+    config.modeSource === "invalid"
+      ? [
+          `UNIFI_PROTECT_MODE was not recognised, so ${config.mode} mode was assumed. Valid ` +
+            `values are: ${MODES.join(", ")}.`,
+        ]
+      : [];
+
+  if (config.mode === "cloud") {
+    return [
+      ...modeNote,
+      "Cloud mode reaches your console through Ubiquiti's Site Manager connector, so it needs " +
+        "no local account, no password and no LAN access — and api.ui.com has a real " +
+        "certificate, so none of the self-signed TLS setup applies.",
+      "Create an API key at https://unifi.ui.com → Settings → API Keys, and set it as " +
+        "UNIFI_PROTECT_API_KEY.",
+      'Find your console id with: curl -H "X-API-KEY: $UNIFI_PROTECT_API_KEY" ' +
+        "https://api.ui.com/v1/hosts — then set UNIFI_PROTECT_CONSOLE_ID to the `id` of the " +
+        "console running Protect (a UNVR, or a UDM/Cloud Key with Protect installed).",
+      // The failure people actually hit: the console is visible in the web
+      // dashboard but sits outside the org the key belongs to, and the
+      // connector then answers 403 rather than 401.
+      "If a call comes back 403 'user cannot access host in the organization', the key is valid " +
+        "but was issued in an organization that does not include that console. Create the key " +
+        "from the account that owns it.",
+      "Set UNIFI_PROTECT_MODE=local instead to talk to the console directly on your LAN.",
+    ];
+  }
+
   return [
+    ...modeNote,
     "No UniFi Protect console is configured, so only unifi_protect_auth_status is registered.",
     "Set UNIFI_PROTECT_HOST to your console's address — the IP or hostname of the UDM Pro, " +
       "UNVR or Cloud Key, e.g. 192.168.1.1 (https:// is assumed, and a :port is preserved).",
     "Set UNIFI_PROTECT_USERNAME and UNIFI_PROTECT_PASSWORD to a console login.",
-    // The advice that actually matters. A Ubiquiti SSO account often cannot log
-    // in locally at all, and reusing the owner account hands an agent the keys
-    // to the whole console rather than to Protect.
     "Create a dedicated LOCAL user for this rather than reusing your own: UniFi OS → Settings → " +
       "Admins & Users → Add User → Local Access Only, and give it Protect permissions only. A " +
       "Ubiquiti cloud (SSO) account may fail local login entirely, and a local account keeps the " +
@@ -289,10 +448,9 @@ export const setupInstructions = (config: Config): string[] => {
     "If the account has 2FA, pass a current code once via unifi_protect_auth_login; the session " +
       "is then cached and reused. A code in UNIFI_PROTECT_TOTP expires in about 30 seconds, so " +
       "it is no use for an unattended start.",
-    "Certificate verification is ON by default. A console reached by IP can never pass it: " +
-      "the certificate is self-signed AND has no IP SAN. Either set UNIFI_PROTECT_HOST to a host " +
-      "name that resolves to the console and point NODE_EXTRA_CA_CERTS at its certificate, or " +
-      "set UNIFI_PROTECT_VERIFY_TLS=false, which is scoped to this server's requests only. " +
-      "Set it to true only if you installed a certificate your machine already trusts.",
+    // The alternative most people do not know exists.
+    "Alternatively set UNIFI_PROTECT_MODE=cloud with UNIFI_PROTECT_API_KEY and " +
+      "UNIFI_PROTECT_CONSOLE_ID: that needs no local account at all, works off-LAN, and avoids " +
+      "the console's self-signed certificate entirely.",
   ];
 };

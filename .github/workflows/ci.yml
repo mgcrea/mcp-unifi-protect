@@ -117,7 +117,23 @@ jobs:
             grep -q "\"name\":\"unifi_protect_$t\"" /tmp/rw.json \
               || { echo "write tool $t missing with UNIFI_PROTECT_ALLOW_WRITES=1"; exit 1; }
           done
-          echo "MCP smoke test passed: 3 states, gating verified in both directions."
+          # 4. Cloud mode: a different auth path and a different base URL, but
+          # the same tool surface. Registering a different set in either mode
+          # would be a silent contract break.
+          req | env HOME=/nonexistent UNIFI_PROTECT_CONFIG=/nonexistent.json \
+            UNIFI_PROTECT_MODE=cloud UNIFI_PROTECT_API_KEY=ci-fake \
+            UNIFI_PROTECT_CONSOLE_ID=CI:0 UNIFI_PROTECT_ALLOW_WRITES= \
+            node dist/cli.js 2>/dev/null > /tmp/cloud.json
+          for t in list_events list_cameras get_camera_snapshot auth_status; do
+            grep -q "\"name\":\"unifi_protect_$t\"" /tmp/cloud.json \
+              || { echo "cloud mode is missing $t"; exit 1; }
+          done
+          # Cloud mode authenticates per-request with the key, so a login tool
+          # would be meaningless there.
+          ! grep -q '"name":"unifi_protect_auth_login"' /tmp/cloud.json \
+            || { echo "auth_login registered in cloud mode, where there is no login"; exit 1; }
+
+          echo "MCP smoke test passed: 4 states, gating verified in both directions."
 
   publish-npm:
     name: Publish to npm

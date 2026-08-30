@@ -44,10 +44,12 @@ const main = async (): Promise<void> => {
   await server.connect(transport);
 
   stderrLogger.warn(
-    `unifi-protect-mcp connected (host=${config.baseUrl ?? "MISSING"}, ` +
-      `user=${config.username ?? "MISSING"}, ` +
+    `unifi-protect-mcp connected (mode=${config.mode}, ` +
+      (config.mode === "cloud"
+        ? `console=${config.consoleId ?? "MISSING"}, auth=${config.apiKey ? "api-key" : "MISSING"}, `
+        : `host=${config.baseUrl ?? "MISSING"}, user=${config.username ?? "MISSING"}, `) +
       `writes=${config.allowWrites ? "ENABLED" : "disabled"}, ` +
-      `tls=${config.verifyTls ? "verified" : "UNVERIFIED"})`,
+      `tls=${config.mode === "cloud" || config.verifyTls ? "verified" : "UNVERIFIED"})`,
   );
 
   // Connecting successfully but exposing one tool is confusing unless we say

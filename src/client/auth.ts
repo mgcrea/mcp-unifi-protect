@@ -9,15 +9,18 @@ export type Logger = {
 };
 
 /** The two headers that authenticate every request to a UniFi OS console. */
-export type SessionHeaders = {
-  cookie: string;
-  "x-csrf-token": string;
-};
+/**
+ * The headers that authenticate one request. Deliberately an open record rather
+ * than the cookie/CSRF pair it used to be: local mode sends
+ * `cookie` + `x-csrf-token`, cloud mode sends a single `x-api-key`, and the
+ * client should not have to know which it is holding.
+ */
+export type SessionHeaders = Record<string, string>;
 
 export type SessionStatus = {
   authenticated: boolean;
   /** Where the live session came from, for unifi_protect_auth_status. */
-  source: "none" | "restored" | "login";
+  source: "none" | "restored" | "login" | "api-key";
   username: string | undefined;
   savedAt: string | undefined;
 };
@@ -273,6 +276,28 @@ export const createSessionProvider = (opts: SessionProviderOptions): SessionProv
         savedAt: session?.savedAt,
       };
     },
+  };
+};
+
+/**
+ * Cloud mode's provider. The Site Manager connector authenticates the request
+ * itself, so there is no login, no cookie, no CSRF token and nothing to
+ * invalidate — a 401 here means the key is wrong or the console is outside the
+ * key's organization, and retrying cannot fix either.
+ */
+export const apiKeySessionProvider = (apiKey: string): SessionProvider => {
+  const status: SessionStatus = {
+    authenticated: true,
+    source: "api-key",
+    username: undefined,
+    savedAt: undefined,
+  };
+  return {
+    headers: async () => ({ "x-api-key": apiKey }),
+    invalidate: () => {},
+    login: async () => status,
+    logout: async () => {},
+    describe: () => status,
   };
 };
 

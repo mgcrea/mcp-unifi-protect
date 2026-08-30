@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { isConfigured, loadConfig, normalizeBaseUrl, setupInstructions } from "../src/config.js";
+import {
+  consoleOrigin,
+  isConfigured,
+  loadConfig,
+  normalizeBaseUrl,
+  setupInstructions,
+} from "../src/config.js";
 import { toEpochMs } from "../src/tools/util.js";
 
 const NO_FILE = "/nonexistent/unifi-protect-config.json";
@@ -106,5 +112,79 @@ describe("toEpochMs", () => {
 
   it("explains an unparseable value", () => {
     expect(() => toEpochMs("last tuesday", now)).toThrow(/ISO 8601/);
+  });
+});
+
+describe("modes", () => {
+  const NONE = "/nonexistent/unifi-protect-config.json";
+
+  it("defaults to local", () => {
+    expect(loadConfig({}, NONE).mode).toBe("local");
+  });
+
+  it("infers cloud from an api key plus a console id", () => {
+    // Nobody sets both of those for a local install, so requiring an explicit
+    // UNIFI_PROTECT_MODE would only be a way to get it wrong.
+    const c = loadConfig({ UNIFI_PROTECT_API_KEY: "k", UNIFI_PROTECT_CONSOLE_ID: "abc:1" }, NONE);
+    expect(c.mode).toBe("cloud");
+    expect(c.modeSource).toBe("inferred");
+    expect(isConfigured(c)).toBe(true);
+  });
+
+  it("accepts the synonyms people actually type", () => {
+    for (const v of ["cloud", "remote", "site-manager", "CLOUD"]) {
+      expect(loadConfig({ UNIFI_PROTECT_MODE: v }, NONE).mode, v).toBe("cloud");
+    }
+    for (const v of ["local", "console", "unifios", "unifi-os", "lan"]) {
+      expect(loadConfig({ UNIFI_PROTECT_MODE: v }, NONE).mode, v).toBe("local");
+    }
+  });
+
+  it("does not exit on an unrecognised mode", () => {
+    // Exiting over a typo is the exact failure this server exists to avoid —
+    // the client would show only "Connection closed".
+    const c = loadConfig({ UNIFI_PROTECT_MODE: "nonsense" }, NONE);
+    expect(c.mode).toBe("local");
+    expect(c.modeSource).toBe("invalid");
+    expect(setupInstructions(c).join(" ")).toMatch(/not recognised/i);
+  });
+
+  it("builds the connector origin in cloud mode", () => {
+    const c = loadConfig(
+      { UNIFI_PROTECT_MODE: "cloud", UNIFI_PROTECT_API_KEY: "k", UNIFI_PROTECT_CONSOLE_ID: "C1:2" },
+      NONE,
+    );
+    expect(consoleOrigin(c)).toBe("https://api.ui.com/v1/connector/consoles/C1:2");
+  });
+
+  it("uses the console origin in local mode", () => {
+    const c = loadConfig(
+      {
+        UNIFI_PROTECT_HOST: "10.0.0.9:8443",
+        UNIFI_PROTECT_USERNAME: "u",
+        UNIFI_PROTECT_PASSWORD: "p",
+      },
+      NONE,
+    );
+    expect(consoleOrigin(c)).toBe("https://10.0.0.9:8443");
+  });
+
+  it("cloud mode needs no local account, and says so when half-set", () => {
+    expect(isConfigured(loadConfig({ UNIFI_PROTECT_MODE: "cloud" }, NONE))).toBe(false);
+    expect(() =>
+      loadConfig({ UNIFI_PROTECT_MODE: "cloud", UNIFI_PROTECT_API_KEY: "k" }, NONE),
+    ).toThrow(/UNIFI_PROTECT_CONSOLE_ID/);
+    expect(() =>
+      loadConfig({ UNIFI_PROTECT_MODE: "cloud", UNIFI_PROTECT_CONSOLE_ID: "c" }, NONE),
+    ).toThrow(/UNIFI_PROTECT_API_KEY/);
+  });
+
+  it("cloud setup guidance names the 403 org trap", () => {
+    // Verified against a live account: a key valid for /v1/hosts still gets
+    // 403 "user cannot access host in the organization" for a console outside
+    // its org, which reads nothing like a credentials problem.
+    const text = setupInstructions(loadConfig({ UNIFI_PROTECT_MODE: "cloud" }, NONE)).join(" ");
+    expect(text).toMatch(/organization/i);
+    expect(text).toMatch(/api\.ui\.com\/v1\/hosts/);
   });
 });
