@@ -582,6 +582,27 @@ describe("resources and prompts", () => {
     expect(body).toContain("last 24 hours");
   });
 
+  it("declares at most one argument per prompt", async () => {
+    // A slash command hands over ONE free-text string, which a client splits
+    // across several declared arguments positionally: {location, start, end}
+    // turned "this night in front of the house?" into location="this",
+    // start="night", end="in" and rendered a confidently wrong instruction.
+    for (const prompt of (await connect(baseConfig).then((c) => c.listPrompts())).prompts) {
+      expect(prompt.arguments?.length ?? 0, prompt.name).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("passes a free-text question through verbatim for the model to interpret", async () => {
+    const client = await connect(baseConfig);
+    const prompt = await client.getPrompt({
+      name: "who_passed",
+      arguments: { query: "this night in front of the house?" },
+    });
+    const body = prompt.messages.map((m) => (m.content as { text: string }).text).join(" ");
+    expect(body).toContain("this night in front of the house?");
+    expect(body).toContain("Interpret that question yourself");
+  });
+
   it("tells who_passed to check the warnings before answering", async () => {
     const client = await connect(baseConfig);
     const prompt = await client.getPrompt({

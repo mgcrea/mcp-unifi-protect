@@ -55,48 +55,64 @@ export const registerPrompts = (server: McpServer): void => {
       description:
         "Find out who or what was present at a place during a time window, falling back to " +
         "motion frames on cameras whose detectors are off.",
-      // EVERY argument is optional, deliberately. A slash command is invoked
-      // with no arguments in at least one client, and a required argument then
-      // fails schema validation before the prompt is ever rendered — the whole
-      // command is dead rather than merely under-specified. A prompt is a
-      // starting point for a conversation, so an absent window becomes a
-      // sensible default plus a note saying how to narrow it.
+      // ONE argument, holding free text, deliberately.
+      //
+      // A slash command hands the prompt a single string typed by the user, and
+      // a client with several declared arguments splits it across them
+      // positionally. Declaring {location, start, end} turned "this night in
+      // front of the house?" into location="this", start="night", end="in", and
+      // rendered the instruction "passed the this between night and in" — a
+      // confidently wrong prompt rather than a visible failure.
+      //
+      // It is also optional, because the same command is invoked with no
+      // argument at all, and a required one fails schema validation before the
+      // prompt is ever rendered, killing the command outright.
+      //
+      // So: take the sentence as written, and let the model interpret it. It is
+      // better at "this night in front of the house" than any parser here, and
+      // the tools already accept local times and named locations directly.
       argsSchema: {
-        location: z
-          .string()
-          .optional()
-          .describe('Place to look at, e.g. "front". Omit to search every camera.'),
-        start: z
+        query: z
           .string()
           .optional()
           .describe(
-            'Start of the window in the console\'s local clock, e.g. "1am" or "22:00". ' +
-              "Defaults to 24 hours ago.",
+            "What to look for, in plain language — where and when, as you would say it, e.g. " +
+              '"this night in front of the house" or "anyone at the gate after midnight". ' +
+              "Leave empty for everything in the last 24 hours.",
           ),
-        end: z.string().optional().describe('End of the window, e.g. "6am". Defaults to now.'),
       },
     },
-    ({ location, start, end }) => {
-      const from = start ?? "24h";
-      const to = end ?? "now";
-      const defaulted = start === undefined && end === undefined;
+    ({ query }) => {
+      const asked = query?.trim();
       return text(
         [
-          `Find out who or what passed ${location ? `the ${location}` : "any camera"} between ${from} and ${to}.`,
-          ...(defaulted
+          asked
+            ? `Find out who or what passed, per this question: "${asked}"`
+            : "Find out who or what passed any camera in the last 24 hours.",
+          "",
+          ...(asked
             ? [
+                "Interpret that question yourself — it is one sentence of free text, and the",
+                "place and period are in it. Do not pass it to a tool verbatim.",
                 "",
-                "No window was given, so this covers the last 24 hours. If the question was",
-                'about a narrower period, say so — local times like "1am" and "6am" are',
-                "accepted directly and are read in the console's own time zone.",
+                "  * The PERIOD: `unifi_protect_list_events` takes local times directly",
+                '    ("1am", "22:00", "2h ago"), read in the console\'s own time zone, so',
+                "    translate the phrasing into start/end rather than converting by hand.",
+                '    "This night" or "last night" means roughly 22:00 to 08:00.',
+                "  * The PLACE: read `unifi-protect://locations` for the configured names and",
+                "    pass `location`. If it names nowhere that is configured, look at",
+                "    `unifi_protect_list_cameras`, choose the cameras that plausibly cover it,",
+                "    pass them as `cameraIds`, and SAY which you chose and that it was your",
+                "    inference — the console does not know where anything is.",
+                "",
               ]
-            : []),
-          "",
-          "Times are in the console's local zone; `unifi_protect_list_events` accepts them",
-          "directly, so pass them through rather than converting by hand.",
-          "",
+            : [
+                "No question was given, so this covers every camera over the last 24 hours. If",
+                "a narrower period or place was meant, say so.",
+                "",
+              ]),
           '1. Search with `unifi_protect_list_events`, types `["smartDetectZone"]` and',
-          `   smartDetectTypes ["person"], start "${from}", end "${to}"${location ? `, location "${location}"` : ""}.`,
+          '   smartDetectTypes ["person"], over the window and cameras you settled on.',
           "2. READ THE `warnings` FIELD BEFORE REPORTING ANYTHING. A camera with person",
           "   detection disabled contributes zero matches, and zero is NOT evidence that nobody",
           "   was there. If any warning says a detector is off, you have not answered the",
@@ -110,7 +126,9 @@ export const registerPrompts = (server: McpServer): void => {
           "   two apart: one is the console's judgement and one is yours.",
           "5. Say plainly what was NOT covered: cameras that were offline, not recording, or",
           "   whose motion zone excludes part of the scene. A thumbnail is the triggering frame",
-          "   only, so someone entering later in a clip does not appear in it.",
+          "   only, so someone entering later in a clip does not appear in it. The warnings in",
+          "   step 2 describe each camera's setting NOW — if the window reaches back before a",
+          "   recent settings change, a detector may have been off then with nothing to say so.",
         ].join("\n"),
       );
     },
