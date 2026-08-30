@@ -53,6 +53,24 @@ jobs:
       # in the ambient environment, so the test asserts the same thing on a
       # developer's machine as it does here. (An env var set to "" reads as
       # unset, by design — see `trimmed` in src/config.ts.)
+      # "private": true silently blocks BOTH `npm publish` and the CI publish
+      # job, and it has already been reintroduced once by a commit carrying a
+      # stale package.json. Fail loudly here rather than at release time.
+      - name: Package is publishable 🔍
+        run: |
+          node -e '
+            const pkg = require("./package.json");
+            if (pkg.private) {
+              console.error("package.json has \"private\": true — npm publish and the release job will both refuse it.");
+              process.exit(1);
+            }
+            if (!pkg.publishConfig || pkg.publishConfig.access !== "public") {
+              console.error("a scoped package needs publishConfig.access = \"public\".");
+              process.exit(1);
+            }
+            console.log(`publishable: ${pkg.name}@${pkg.version}`);
+          '
+
       - name: MCP smoke test 🧪
         run: |
           req() {
