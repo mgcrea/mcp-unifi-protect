@@ -261,7 +261,11 @@ Two prompts carry the procedure, which is the part a tool list cannot express:
 - **`check_camera_settings`** — run the audit and interpret it, changing nothing. Several
   findings have two valid opposite fixes, and which is right depends on what the camera is for.
 - **`who_passed`** — find who was present in a window, and **fall back to motion frames on any
-  camera whose detector is off** rather than reporting a zero count as an absence.
+  camera whose detector is off** rather than reporting a zero count as an absence. It takes the
+  question as one free-text argument, so **quote it**: slash-command arguments are split
+  shell-style and mapped positionally, so `who_passed in front of the house last night?` arrives
+  as just `"in"`, while `who_passed "in front of the house last night?"` arrives whole. A
+  single-word question is treated as that truncation and refused rather than answered.
 
 ## Worked example: what happened at the front door last night
 

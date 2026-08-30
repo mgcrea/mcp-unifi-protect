@@ -592,6 +592,27 @@ describe("resources and prompts", () => {
     }
   });
 
+  it("refuses to answer a one-word question, which is the truncation signature", async () => {
+    // Arguments are split shell-style, so an unquoted sentence arrives as its
+    // first word: "in front of the house last night?" became "in", which still
+    // rendered a confident prompt about nothing.
+    const client = await connect(baseConfig);
+    const prompt = await client.getPrompt({ name: "who_passed", arguments: { query: "in" } });
+    const body = prompt.messages.map((m) => (m.content as { text: string }).text).join(" ");
+    expect(body).toContain("STOP");
+    expect(body).toContain("cut off");
+  });
+
+  it("does not cry truncation over a real multi-word question", async () => {
+    const client = await connect(baseConfig);
+    const prompt = await client.getPrompt({
+      name: "who_passed",
+      arguments: { query: "at the gate after midnight" },
+    });
+    const body = prompt.messages.map((m) => (m.content as { text: string }).text).join(" ");
+    expect(body).not.toContain("STOP");
+  });
+
   it("passes a free-text question through verbatim for the model to interpret", async () => {
     const client = await connect(baseConfig);
     const prompt = await client.getPrompt({

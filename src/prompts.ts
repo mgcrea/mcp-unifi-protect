@@ -76,19 +76,37 @@ export const registerPrompts = (server: McpServer): void => {
           .string()
           .optional()
           .describe(
-            "What to look for, in plain language — where and when, as you would say it, e.g. " +
-              '"this night in front of the house" or "anyone at the gate after midnight". ' +
-              "Leave empty for everything in the last 24 hours.",
+            "What to look for, in plain language — where and when, as you would say it. " +
+              'QUOTE IT: arguments are split shell-style, so /who_passed "in front of the ' +
+              'house last night" arrives whole while the same words unquoted arrive as just ' +
+              '"in". Leave empty for everything in the last 24 hours.',
           ),
       },
     },
     ({ query }) => {
       const asked = query?.trim();
+      // Arguments are split shell-style and mapped positionally, so an unquoted
+      // sentence arrives as its FIRST WORD and the rest is discarded. That is
+      // silent: "in front of the house last night?" became "in", which still
+      // renders a perfectly confident prompt about nothing. A single bare word
+      // is far more likely to be that truncation than a real question, so say
+      // so rather than answering a fragment.
+      const looksTruncated = asked !== undefined && asked.length > 0 && !/\s/.test(asked);
       return text(
         [
           asked
             ? `Find out who or what passed, per this question: "${asked}"`
             : "Find out who or what passed any camera in the last 24 hours.",
+          ...(looksTruncated
+            ? [
+                "",
+                "STOP — that is a single word, which usually means the question was cut off.",
+                "Slash-command arguments are split shell-style and only the first word reaches",
+                'here, so `who_passed in front of the house last night?` arrives as "in".',
+                "Do not answer a fragment. Ask what was meant, and mention that quoting the",
+                'sentence — who_passed "in front of the house last night?" — passes it whole.',
+              ]
+            : []),
           "",
           ...(asked
             ? [
