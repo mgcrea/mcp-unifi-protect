@@ -45,7 +45,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "release": "pnpm dlx release-it",
+    "release": "npm version --message \"release: cut the v%s release\"",
     "docker:build": "BUILDER=build scripts/docker-build.sh",
     "docker:buildx": "BUILDER=buildx scripts/docker-build.sh",
     "docker:push": "docker push mgcrea/mcp-unifi-protect:latest && docker push mgcrea/mcp-unifi-protect:$npm_package_version",

@@ -458,7 +458,7 @@ pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build
 Publish:
 
 ```bash
-pnpm dlx release-it            # bump, commit, tag
+pnpm release minor             # bump, commit, tag (patch|minor|major)
 git push --follow-tags         # CI publishes to npm + GHCR from the tag
 ```
 
