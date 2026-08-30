@@ -77,7 +77,9 @@ jobs:
             printf '%s\n' \
               '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
               '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
-              '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+              '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+              '{"jsonrpc":"2.0","id":3,"method":"resources/list"}' \
+              '{"jsonrpc":"2.0","id":4,"method":"prompts/list"}'
           }
 
           # 1. No credentials at all. The server MUST stay up and answer
@@ -92,6 +94,10 @@ jobs:
             || { echo "server did not answer tools/list without credentials"; exit 1; }
           ! grep -q '"name":"unifi_protect_list_cameras"' /tmp/none.json \
             || { echo "console tools registered with no console configured"; exit 1; }
+          # Resources and prompts are gated the same way: advertising a resource
+          # that fails on every read is worse than not offering it.
+          ! grep -q 'unifi-protect://cameras' /tmp/none.json \
+            || { echo "resources registered with no console configured"; exit 1; }
 
           # 2. Configured, writes off — the default install.
           req | env HOME=/nonexistent UNIFI_PROTECT_CONFIG=/nonexistent.json \
@@ -102,7 +108,16 @@ jobs:
             || { echo "read tools missing when configured"; exit 1; }
           # The negative half of the promise: a write tool must not merely
           # refuse when writes are off, it must not be registered at all.
-          for t in reboot_nvr reboot_camera update_camera set_camera_recording_mode; do
+          # The three resources and two prompts must be there once configured.
+          for r in console cameras locations; do
+            grep -q "unifi-protect://$r" /tmp/ro.json \
+              || { echo "resource unifi-protect://$r missing when configured"; exit 1; }
+          done
+          for pr in check_camera_settings who_passed; do
+            grep -q "\"name\":\"$pr\"" /tmp/ro.json \
+              || { echo "prompt $pr missing when configured"; exit 1; }
+          done
+          for t in reboot_nvr reboot_camera update_camera set_camera_recording_mode set_camera_detections; do
             ! grep -q "\"name\":\"unifi_protect_$t\"" /tmp/ro.json \
               || { echo "write tool $t leaked without UNIFI_PROTECT_ALLOW_WRITES"; exit 1; }
           done
@@ -113,7 +128,7 @@ jobs:
             UNIFI_PROTECT_HOST=192.168.1.1 UNIFI_PROTECT_USERNAME=ci UNIFI_PROTECT_PASSWORD=ci \
             UNIFI_PROTECT_ALLOW_WRITES=1 \
             node dist/cli.js 2>/dev/null > /tmp/rw.json
-          for t in reboot_nvr update_camera set_camera_recording_mode; do
+          for t in reboot_nvr update_camera set_camera_recording_mode set_camera_detections; do
             grep -q "\"name\":\"unifi_protect_$t\"" /tmp/rw.json \
               || { echo "write tool $t missing with UNIFI_PROTECT_ALLOW_WRITES=1"; exit 1; }
           done
@@ -133,7 +148,7 @@ jobs:
           ! grep -q '"name":"unifi_protect_auth_login"' /tmp/cloud.json \
             || { echo "auth_login registered in cloud mode, where there is no login"; exit 1; }
 
-          echo "MCP smoke test passed: 4 states, gating verified in both directions."
+          echo "MCP smoke test passed: 4 states, tools + resources + prompts gated both ways."
 
   publish-npm:
     name: Publish to npm
