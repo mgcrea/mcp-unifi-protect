@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import { cameraFacts, GATED_OBJECT_TYPES } from "../client/detection.js";
 import type { ProtectClient } from "../client/protect.js";
 import { summarizeCamera, summarizeEach } from "../client/shape.js";
 import type { ToolContext } from "./index.js";
@@ -222,6 +223,129 @@ export const registerCameraTools = (
         return summarizeCamera(
           await client.patch<Rec>(`cameras/${encodeURIComponent(cameraId)}`, body),
         );
+      }),
+  );
+
+  server.registerTool(
+    "unifi_protect_set_camera_detections",
+    {
+      description:
+        "Turn a camera's smart detections on or off — which objects it looks for (person, " +
+        "vehicle, animal, package) and which sounds it listens for. THIS is the setting that " +
+        "decides whether a person search can ever match: a detection zone may list `person` " +
+        "while the device list omits it, and the console then reports nothing at all, with no " +
+        "error. Pass objectTypes to set the device list, and leave syncZones true so the zones " +
+        "are brought into line rather than left making a promise the device does not keep. " +
+        "Values the camera does not support are rejected by name rather than silently dropped.",
+      inputSchema: {
+        cameraId: cameraIdArg,
+        objectTypes: z
+          .array(z.enum(GATED_OBJECT_TYPES))
+          .optional()
+          .describe(
+            "What the camera should detect. This REPLACES the current list, so include " +
+              "everything you want kept. Check the camera's supported types with " +
+              "unifi_protect_list_cameras first; `package` only works on a doorbell's second " +
+              "lens, which the console handles on its own.",
+          ),
+        audioTypes: z
+          .array(z.string().min(1))
+          .optional()
+          .describe(
+            'Audio detections to enable, e.g. ["alrmSmoke","alrmSpeak"]. Replaces the current ' +
+              "list. `alrmSpeak` catches conversation, which is often the only signal on a " +
+              "camera with object detection off.",
+          ),
+        syncZones: z
+          .boolean()
+          .default(true)
+          .describe(
+            "Also rewrite the detection zones to match objectTypes. Leave this true: a zone " +
+              "asking for a type the device list blocks is the misconfiguration this tool " +
+              "exists to prevent.",
+          ),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    async ({ cameraId, objectTypes, audioTypes, syncZones }) =>
+      wrap(async () => {
+        if (objectTypes === undefined && audioTypes === undefined) {
+          throw new Error("Nothing to change — pass objectTypes, audioTypes, or both.");
+        }
+
+        const path = `cameras/${encodeURIComponent(cameraId)}`;
+        const current = await client.get<Rec>(path);
+        const facts = cameraFacts(current);
+
+        if (!facts.hasSmartDetect) {
+          throw new Error(
+            `${facts.name} has no smart-detection hardware, so there is nothing to enable. It ` +
+              "can only do plain motion detection.",
+          );
+        }
+
+        const unsupported = (objectTypes ?? []).filter((t) => !facts.capable.includes(t));
+        if (unsupported.length > 0) {
+          throw new Error(
+            `${facts.name} does not support ${unsupported.join(", ")}. It supports: ` +
+              `${facts.capable.join(", ") || "nothing"}.`,
+          );
+        }
+
+        // The console REPORTS audio types it REFUSES to accept back: `smoke_cmonx`
+        // comes out of every read but a PATCH containing it fails with
+        // "The smart detection feature is not enabled for: smoke_cmonx". Anything
+        // doing read-modify-write here breaks on it, so the write is filtered
+        // against the capability list and what was dropped is reported.
+        const requestedAudio = audioTypes ?? [];
+        const audioToSet = requestedAudio.filter((t) => facts.audioCapable.includes(t));
+        const audioRejected = requestedAudio.filter((t) => !facts.audioCapable.includes(t));
+        if (requestedAudio.length > 0 && audioToSet.length === 0) {
+          throw new Error(
+            `${facts.name} supports none of those audio types. It supports: ` +
+              `${facts.audioCapable.join(", ") || "none"}.`,
+          );
+        }
+
+        const smartDetectSettings = compactOrUndefined({
+          objectTypes,
+          ...(audioTypes !== undefined ? { audioTypes: audioToSet } : {}),
+        });
+
+        // A doorbell's package detection lives on the SECOND lens; the primary
+        // zone cannot carry it (`hasPackageZoneSupportForPrimaryLens: false`),
+        // and the console manages that zone itself. Never write it here.
+        const zones =
+          syncZones && objectTypes !== undefined && Array.isArray(current.smartDetectZones)
+            ? current.smartDetectZones.map((zone) =>
+                typeof zone === "object" && zone !== null
+                  ? { ...zone, objectTypes: objectTypes.filter((t) => t !== "package") }
+                  : zone,
+              )
+            : undefined;
+
+        const updated = await client.patch<Rec>(
+          path,
+          compactOrUndefined({ smartDetectSettings, smartDetectZones: zones }) ?? {},
+        );
+        const after = cameraFacts(updated);
+
+        return {
+          camera: after.name,
+          enabled: after.enabled,
+          zone: after.zone,
+          audioEnabled: after.audioEnabled,
+          blocked: after.blocked,
+          ...(audioRejected.length > 0
+            ? {
+                audioRejected,
+                note:
+                  `${audioRejected.join(", ")} ${audioRejected.length === 1 ? "is" : "are"} not ` +
+                  `settable on this camera and ${audioRejected.length === 1 ? "was" : "were"} ` +
+                  "left out. The console reports some such values on read but refuses them on write.",
+              }
+            : {}),
+        };
       }),
   );
 
