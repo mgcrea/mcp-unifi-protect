@@ -50,7 +50,8 @@
     "docker:buildx": "BUILDER=buildx scripts/docker-build.sh",
     "docker:push": "docker push mgcrea/mcp-unifi-protect:latest && docker push mgcrea/mcp-unifi-protect:$npm_package_version",
     "docker:release": "BUILDER=buildx scripts/docker-build.sh --push",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm run check:deps && pnpm build",
+    "check:deps": "node -e \"const d=require('./package.json').dependencies;const bad=Object.entries(d).filter(([,v])=>/^(link|file|workspace):/.test(v));if(bad.length){console.error('Refusing to publish: '+bad.map(([k,v])=>k+'@'+v).join(', ')+' resolves to a local path and would not install for anyone else.');process.exit(1)}\""
   },
   "dependencies": {
     "@mgcrea/unifi-protect": "link:../../../../Developer/homebridge/unifi-protect-client",
