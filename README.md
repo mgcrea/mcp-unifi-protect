@@ -447,6 +447,15 @@ writes — each value set to the value it already held — and the device state 
 afterwards. That run is also what caught three bugs this README's earlier drafts described
 wrongly: the storage layout, the event-thumbnail id, and two camera fields that do not exist.
 
+**Certificate pinning** was verified against that same console on 2026-08-31, addressed by IP
+(`192.168.6.3`) with verification ON — the case that was impossible before. Confirmed in one run:
+the certificate is captured and its fingerprint logged on first contact; the trust file is written
+mode `600`; a restart reuses the pin without re-capturing; a correct `UNIFI_PROTECT_FINGERPRINT`
+(colons and all) is accepted; and a wrong one is refused with a message naming both fingerprints,
+surfacing as a failed tool call rather than a server that never starts. `auth_status` reported
+`reachable: true` on Protect 7.2.105 throughout, and a session cached by the previous release was
+restored unchanged — the on-disk format did not move.
+
 Two tools remain **unverified for want of hardware**, and are marked here rather than left to look
 tested:
 

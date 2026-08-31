@@ -70,7 +70,7 @@ export const createServer = (opts: CreateServerOptions): CreatedServer => {
     maxRetries: config.maxRetries,
     userAgent: USER_AGENT,
     maxDownloadBytes: config.maxDownloadBytes,
-    downloadLimitHint: "Or raise UNIFI_PROTECT_MAX_DOWNLOAD_BYTES.",
+    downloadLimitHint: "Narrow the request, or raise UNIFI_PROTECT_MAX_DOWNLOAD_BYTES.",
     fetch: fetchImpl,
     ...(opts.logger ? { logger: opts.logger } : {}),
   });

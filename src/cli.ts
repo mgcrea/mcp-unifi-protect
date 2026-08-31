@@ -14,6 +14,11 @@ const stderrLogger = {
   debug: (...args: unknown[]) => {
     if (process.env.UNIFI_PROTECT_DEBUG) console.error("[unifi-protect-mcp]", ...args);
   },
+  // Not optional despite nothing here calling it: @mgcrea/unifi-protect reports
+  // a newly learned certificate fingerprint at info, and that is the one line
+  // someone needs in order to pin it explicitly afterwards. Omitting `info`
+  // drops it silently, because the client's Logger has every level optional.
+  info: (...args: unknown[]) => console.error("[unifi-protect-mcp]", ...args),
   warn: (...args: unknown[]) => console.error("[unifi-protect-mcp]", ...args),
   error: (...args: unknown[]) => console.error("[unifi-protect-mcp]", ...args),
 };
