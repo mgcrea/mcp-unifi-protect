@@ -54,7 +54,7 @@
     "check:deps": "node -e \"const d=require('./package.json').dependencies;const bad=Object.entries(d).filter(([,v])=>/^(link|file|workspace):/.test(v));if(bad.length){console.error('Refusing to publish: '+bad.map(([k,v])=>k+'@'+v).join(', ')+' resolves to a local path and would not install for anyone else.');process.exit(1)}\""
   },
   "dependencies": {
-    "@mgcrea/unifi-protect": "link:../../../../Developer/homebridge/unifi-protect-client",
+    "@mgcrea/unifi-protect": "^0.2.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "zod": "^4.4.3"
   },
