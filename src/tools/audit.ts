@@ -1,8 +1,8 @@
+import type { ProtectClient } from "@mgcrea/unifi-protect";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { cameraFacts, type CameraFacts } from "#/client/detection";
-import type { ProtectClient } from "#/client/protect";
 import type { ToolContext } from "#/tools/index";
 import { wrap } from "#/tools/util";
 

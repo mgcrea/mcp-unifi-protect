@@ -15,39 +15,44 @@ export {
   PRIVATE_API_PATH,
   resolveConfigPath,
   resolveSessionPath,
+  resolveTrustPath,
   setupInstructions,
   UPDATES_WS_PATH,
   type Config,
   type FileConfig,
 } from "#/config";
+/**
+ * The console client is `@mgcrea/unifi-protect` and is re-exported so a
+ * consumer of this server does not have to depend on both. What used to be
+ * exported from here — `createSessionProvider` taking this server's `Config`,
+ * and the `loadSession`/`saveSession` helpers — is gone: the handshake now
+ * lives in that package, whose `createSessionProvider` takes a base URL and
+ * credentials instead. Hence the major version.
+ */
 export {
-  createSessionProvider,
+  buildQuery,
+  ProtectClient,
   staticSessionProvider,
+  type BinaryResult,
   type Logger,
+  type ProtectClientOptions,
+  type Query,
   type SessionHeaders,
   type SessionProvider,
   type SessionStatus,
-} from "#/client/auth";
+} from "@mgcrea/unifi-protect";
 export {
-  clearSession,
-  loadSession,
-  saveSession,
-  type PersistedSession,
-} from "#/client/session-store";
+  apiKeySessionProvider,
+  createConsoleSessionProvider,
+  notConfiguredSessionProvider,
+} from "#/client/session";
+export { createLazyTransport, type LazyTransport } from "#/client/transport";
 export { createDeviceCache, type DeviceCache } from "#/client/device-cache";
-export {
-  backoffMs,
-  buildQuery,
-  ProtectClient,
-  retryAfterMs,
-  type BinaryResult,
-  type ProtectClientOptions,
-  type Query,
-} from "#/client/protect";
 export {
   NotConfiguredError,
   ProtectApiError,
   ProtectAuthError,
+  ProtectTlsError,
   WritesDisabledError,
 } from "#/client/errors";
 export {

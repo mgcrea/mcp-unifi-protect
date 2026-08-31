@@ -3,7 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { ZodError } from "zod";
 
 import { BUILD_INFO } from "#/build-info";
-import { isConfigured, loadConfig, setupInstructions } from "#/config";
+import { isConfigured, loadConfig, setupInstructions, type Config } from "#/config";
 import { createServer } from "#/server";
 
 // Everything goes to stderr: stdout is the MCP protocol channel, and a stray
@@ -31,15 +31,28 @@ const describeFatal = (err: unknown): string => {
   return err instanceof Error ? err.message : String(err);
 };
 
+/**
+ * How TLS will be handled, said once at startup.
+ *
+ * "pinned" is a promise about the first request rather than a report of one:
+ * the certificate is read lazily, because nothing here may open a socket — a
+ * console that is asleep has to surface as a failed tool call, not as a server
+ * that never starts.
+ */
+const tlsBanner = (config: Config): string => {
+  if (config.mode === "cloud") return "verified";
+  if (!config.verifyTls) return "UNVERIFIED";
+  return config.fingerprint ? "pinned (fingerprint configured)" : "pinned on first use";
+};
+
 const main = async (): Promise<void> => {
   stderrLogger.warn(
     `${BUILD_INFO.name}@${BUILD_INFO.version} (git ${BUILD_INFO.gitCommit} ${BUILD_INFO.gitCommitDate}, node ${process.version})`,
   );
 
   const config = loadConfig();
-  // Before anything can open a socket.
 
-  const { server } = createServer({ config, logger: stderrLogger });
+  const { server, close } = createServer({ config, logger: stderrLogger });
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
@@ -49,7 +62,7 @@ const main = async (): Promise<void> => {
         ? `console=${config.consoleId ?? "MISSING"}, auth=${config.apiKey ? "api-key" : "MISSING"}, `
         : `host=${config.baseUrl ?? "MISSING"}, user=${config.username ?? "MISSING"}, `) +
       `writes=${config.allowWrites ? "ENABLED" : "disabled"}, ` +
-      `tls=${config.mode === "cloud" || config.verifyTls ? "verified" : "UNVERIFIED"})`,
+      `tls=${tlsBanner(config)})`,
   );
 
   // Connecting successfully but exposing one tool is confusing unless we say
@@ -65,6 +78,9 @@ const main = async (): Promise<void> => {
 
   const shutdown = (signal: string): void => {
     stderrLogger.warn(`received ${signal}, shutting down`);
+    // Releases the dispatcher's keep-alive sockets. Best-effort: the exit below
+    // is what actually ends the process, and a hung close must not delay it.
+    void close().catch(() => undefined);
     process.exit(0);
   };
   process.on("SIGINT", () => shutdown("SIGINT"));

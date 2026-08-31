@@ -1,12 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { ProtectClient } from "@mgcrea/unifi-protect";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { detectionWarnings } from "#/client/detection";
 import { resolveLocation } from "#/client/locations";
-import type { ProtectClient } from "#/client/protect";
 import { summarizeEvent } from "#/client/shape";
 import type { ToolContext } from "#/tools/index";
 import {

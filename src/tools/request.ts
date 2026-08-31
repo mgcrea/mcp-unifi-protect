@@ -1,8 +1,8 @@
+import type { ProtectClient } from "@mgcrea/unifi-protect";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { WritesDisabledError } from "#/client/errors";
-import type { ProtectClient } from "#/client/protect";
 import { wrap } from "#/tools/util";
 
 /**

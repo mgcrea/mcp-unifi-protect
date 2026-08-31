@@ -1,7 +1,7 @@
+import { staticSessionProvider } from "@mgcrea/unifi-protect";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { staticSessionProvider } from "#/client/auth";
 import type { Config } from "#/config";
 import { createServer } from "#/server";
 
@@ -28,6 +28,7 @@ const baseConfig: Config = {
   verifyTls: false,
   allowWrites: false,
   sessionFile: "/tmp/unifi-protect-test-session.json",
+  trustFile: "/tmp/unifi-protect-test-trust.json",
   snapshotDir: "/tmp/unifi-protect-test-snapshots",
   maxRetries: 3,
   maxDownloadBytes: 200_000_000,

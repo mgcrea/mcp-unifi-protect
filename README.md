@@ -21,14 +21,14 @@ at all unless you ask for them.
 
 ## Two ways to connect
 
-|                       | `local` (default)                            | `cloud`                                 |
-| --------------------- | -------------------------------------------- | --------------------------------------- |
-| Reaches the console   | directly on your LAN                         | via `api.ui.com` Site Manager connector |
-| Credentials           | host + username + password                   | API key + console id                    |
-| Auth mechanism        | UniFi OS login → session cookie + CSRF token | `X-API-KEY` header                      |
-| TLS                   | console's self-signed cert — needs setup     | a real certificate, nothing to do       |
-| Works off-LAN         | no                                           | yes                                     |
-| Session state on disk | yes, mode `600`                              | none                                    |
+|                       | `local` (default)                                | `cloud`                                 |
+| --------------------- | ------------------------------------------------ | --------------------------------------- |
+| Reaches the console   | directly on your LAN                             | via `api.ui.com` Site Manager connector |
+| Credentials           | host + username + password                       | API key + console id                    |
+| Auth mechanism        | UniFi OS login → session cookie + CSRF token     | `X-API-KEY` header                      |
+| TLS                   | console's self-signed cert — pinned on first use | a real certificate, nothing to do       |
+| Works off-LAN         | no                                               | yes                                     |
+| Session state on disk | yes, mode `600`                                  | none                                    |
 
 **Both modes expose exactly the same tools**, because both speak the same private
 Protect API — the connector forwards the whole `/proxy/protect/...` tree, the private
@@ -51,7 +51,7 @@ UNIFI_PROTECT_CONSOLE_ID=…     # curl -H "X-API-KEY: $KEY" https://api.ui.com/
 UNIFI_PROTECT_HOST=192.168.1.1
 UNIFI_PROTECT_USERNAME=mcp
 UNIFI_PROTECT_PASSWORD=…
-UNIFI_PROTECT_VERIFY_TLS=false
+# TLS needs nothing: the console's certificate is pinned on the first request.
 ```
 
 `UNIFI_PROTECT_MODE` is inferred as `cloud` when an API key and a console id are both
@@ -112,27 +112,40 @@ Integration API — see [Not implemented](#not-implemented).
 
 ## Security
 
-**Supply chain.** Three runtime dependencies: the MCP SDK, zod, and `undici`. Retry and backoff
-are hand-rolled; there is no HTTP client wrapper, no logger, no crypto library. `undici` earns its
-place by being the only way to scope the TLS exception below to this server's own requests — see
-the note there. Published from CI with provenance via OIDC trusted publishing; the container
+**Supply chain.** Three runtime dependencies: the MCP SDK, zod, and
+[`@mgcrea/unifi-protect`](https://github.com/mgcrea/unifi-protect-client) — the console client,
+which is ours and whose own dependencies are `undici`, `ws` and zod. There is no HTTP client
+wrapper, no logger, no crypto library. That client used to be a copy inside this repo; the copy
+and the original had already begun to drift, which is a bad way to hold knowledge about an
+undocumented API. Published from CI with provenance via OIDC trusted publishing; the container
 image is multi-arch, carries an SBOM, and is signed with cosign.
 
 **Your credentials.** The username and password come from the environment or a config file, and
 never leave this process except in the login request to your console. The resulting session
 cookie is cached at `~/.config/unifi-protect/session.json` with mode `600`.
 
-**Certificate verification is ON by default**, and disabling it is scoped to this server's own
-requests through an undici dispatcher — it is not `NODE_TLS_REJECT_UNAUTHORIZED`, so nothing else
-in the process is affected. (It previously _was_ process-wide, on the belief that a dispatcher
-could not be scoped without a dependency. It can, and `undici` is now that dependency.)
+**Certificate verification is ON by default, and now needs no setup.** The console's certificate
+is _pinned_: on the first request the server reads it, records its SHA-256 fingerprint and PEM in
+`~/.config/unifi-protect/trust.json` (mode `600`), and every connection afterwards verifies against
+that one certificate as its own anchor. The host name check is replaced — not skipped — by a
+fingerprint comparison, so addressing the console by IP is fine and a swapped certificate fails
+hard.
 
-Verifying takes two things together, and either alone achieves nothing: the certificate is
-self-signed, so `NODE_EXTRA_CA_CERTS` must point at it; **and** it is issued to `unifi.local` with
-no IP SAN, so `UNIFI_PROTECT_HOST` must be a host name that resolves to the console rather than its
-IP address. Reached by IP, verification fails on the host name however the certificate is trusted.
-See `.env.example` for the two commands. If the console has no name on your network, set
-`UNIFI_PROTECT_VERIFY_TLS=false`; the startup banner then prints `tls=UNVERIFIED` on every run.
+This is what changed. The certificate is issued to `unifi.local` with **no IP SAN**, so reached by
+an IP address, host name verification could never pass however the certificate was trusted; the
+old advice was to set `NODE_EXTRA_CA_CERTS` _and_ address the console by a resolvable name, or
+give up and disable verification. Pinning removes both requirements.
+
+Pinning is trust-on-first-use, and it is only as good as that first moment. The fingerprint is
+logged when it is learned and reported by `unifi_protect_auth_status`; set
+`UNIFI_PROTECT_FINGERPRINT` to make the trust explicit instead, and a console that presents
+anything else is then refused rather than adopted. If the console legitimately reissues its
+certificate, delete the trust file.
+
+`UNIFI_PROTECT_VERIFY_TLS=false` still turns checking off entirely, scoped to this server's own
+requests through an undici dispatcher — it is not `NODE_TLS_REJECT_UNAUTHORIZED`, so nothing else
+in the process is affected. There should no longer be a reason to use it; the startup banner
+prints `tls=UNVERIFIED` on every run when you do.
 
 **Blast radius.** With the defaults, the worst an agent can do is read your cameras and write
 image files into the snapshot directory. With `UNIFI_PROTECT_ALLOW_WRITES=1` it can additionally
@@ -147,7 +160,9 @@ Local-Access-Only account with View Only rights, and leave writes off unless you
 | `UNIFI_PROTECT_USERNAME`           | yes      | —                                      | Console login                                                   |
 | `UNIFI_PROTECT_PASSWORD`           | yes      | —                                      | Its password                                                    |
 | `UNIFI_PROTECT_TOTP`               | no       | —                                      | 2FA code. Expires in ~30s — prefer `unifi_protect_auth_login`   |
-| `UNIFI_PROTECT_VERIFY_TLS`         | no       | `true`                                 | Verify the console's certificate (needs a host name, not an IP) |
+| `UNIFI_PROTECT_VERIFY_TLS`         | no       | `true`                                 | Verify the console's certificate. Off disables pinning entirely |
+| `UNIFI_PROTECT_FINGERPRINT`        | no       | —                                      | Pin this SHA-256 up front instead of learning it on first use   |
+| `UNIFI_PROTECT_TRUST_FILE`         | no       | `~/.config/unifi-protect/trust.json`   | Where the pinned certificate is remembered, mode 600            |
 | `UNIFI_PROTECT_ALLOW_WRITES`       | no       | `false`                                | Register the 12 mutating tools                                  |
 | `UNIFI_PROTECT_SESSION_FILE`       | no       | `~/.config/unifi-protect/session.json` | Cached session, mode 600                                        |
 | `UNIFI_PROTECT_SNAPSHOT_DIR`       | no       | `~/.cache/unifi-protect`               | Where images and exports are written                            |
@@ -387,7 +402,7 @@ returns the setup steps as data.
 `UNIFI_PROTECT_ALLOW_WRITES=1`. That is the design, not a bug — an absent tool cannot be called,
 whereas a refused one invites an agent to keep trying.
 
-**`self-signed certificate` errors.** Verification is on by default and cannot pass against an IP address. Either address the console by name with `NODE_EXTRA_CA_CERTS` set, or `UNIFI_PROTECT_VERIFY_TLS=false`
+**`self-signed certificate` errors.** These should no longer happen: the certificate is pinned on the first request, which works against an IP address. If one appears, the console is presenting a _different_ certificate than the one pinned — delete `~/.config/unifi-protect/trust.json` if it was legitimately reissued, and investigate if it was not
 unless you have installed a trusted certificate on the console.
 
 **Cloud mode returns 403 `user cannot access host in the organization`.** The key is
@@ -446,11 +461,17 @@ Both follow the same PATCH shape as the tools that were verified, so they are li
 
 ## Not implemented
 
-The realtime WebSocket at `/proxy/protect/ws/updates` is not wired up. It is a binary framed
-protocol, and because this server wraps the private API, event _history_ is already available
-over REST through `unifi_protect_list_events` — which is what the WebSocket would have been
-needed for. Node's global `WebSocket` follows the WHATWG signature and ignores a headers option,
-so attaching the session cookie would mean adding `ws` as a dependency.
+The realtime WebSocket at `/proxy/protect/ws/updates` is not wired up here, though
+`@mgcrea/unifi-protect` now implements it — `connectEventStream` and `ProtectStore` are a
+decoded frame stream and a live device cache, and this server deliberately uses neither.
+
+The reason is that they are the wrong shape for an MCP server. Both want a long-lived process
+that bootstraps at start-up and stays subscribed; this server must start with no credentials and
+no connectivity at all, answering `unifi_protect_auth_status` until it is configured. It would
+also gain little: because this wraps the private API, event _history_ is already available over
+REST through `unifi_protect_list_events`, which is what a subscription would have been for.
+Adopting it would mean deferring the bootstrap until credentials appear — worth doing if a tool
+ever needs push rather than poll, and not before.
 
 ## Develop
 

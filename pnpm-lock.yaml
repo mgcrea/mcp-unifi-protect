@@ -8,12 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@mgcrea/unifi-protect':
+        specifier: link:../../../../Developer/homebridge/unifi-protect-client
+        version: link:../../../../Developer/homebridge/unifi-protect-client
       '@modelcontextprotocol/server':
         specifier: ^2.0.0
         version: 2.0.0
-      undici:
-        specifier: ^8.10.0
-        version: 8.10.0
       zod:
         specifier: ^4.4.3
         version: 4.5.1
@@ -1222,10 +1222,6 @@ packages:
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
-  undici@8.10.0:
-    resolution: {integrity: sha512-HvltHd7avK13QIw/oLe4qoOLyoVSoafqJ2jYOrtMRBkbYT31eiBQ8O0ehRKZiEZCMEyLFQNIADpgCWC5fALvYQ==}
-    engines: {node: '>=22.19.0'}
-
   verkit@0.3.2:
     resolution: {integrity: sha512-zj/ob3UsvJGN0whEAKFp53REA5X66hvffVqoCtVQAakJKnKlH+/PcOfMoFwIG/o4rElqLv/ycAFlx8ZlXUorCg==}
     engines: {node: '>=18.12.0'}
@@ -2128,8 +2124,6 @@ snapshots:
       quansync: 1.0.0
 
   undici-types@8.3.0: {}
-
-  undici@8.10.0: {}
 
   verkit@0.3.2: {}
 

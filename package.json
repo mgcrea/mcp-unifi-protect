@@ -53,8 +53,8 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
+    "@mgcrea/unifi-protect": "link:../../../../Developer/homebridge/unifi-protect-client",
     "@modelcontextprotocol/server": "^2.0.0",
-    "undici": "^8.10.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

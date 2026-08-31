@@ -1,5 +1,6 @@
+import type { ProtectClient } from "@mgcrea/unifi-protect";
+
 import { buildCameraIndex, type CameraFacts, type CameraIndex } from "#/client/detection";
-import type { ProtectClient } from "#/client/protect";
 import type { NameIndex } from "#/client/shape";
 
 export type DeviceCacheOptions = {

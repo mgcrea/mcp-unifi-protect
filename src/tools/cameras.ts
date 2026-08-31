@@ -1,11 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { ProtectClient } from "@mgcrea/unifi-protect";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { cameraFacts, GATED_OBJECT_TYPES } from "#/client/detection";
-import type { ProtectClient } from "#/client/protect";
 import { summarizeCamera, summarizeEach } from "#/client/shape";
 import type { ToolContext } from "#/tools/index";
 import { cameraIdArg, compactOrUndefined, confirmArg, ok, wrap, wrapResult } from "#/tools/util";

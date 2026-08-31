@@ -1,8 +1,7 @@
+import type { ProtectClient, SessionProvider } from "@mgcrea/unifi-protect";
 import type { McpServer } from "@modelcontextprotocol/server";
 
-import type { SessionProvider } from "#/client/auth";
 import type { DeviceCache } from "#/client/device-cache";
-import type { ProtectClient } from "#/client/protect";
 import { isConfigured, type Config } from "#/config";
 import { registerAuditTools } from "#/tools/audit";
 import { registerCameraTools } from "#/tools/cameras";

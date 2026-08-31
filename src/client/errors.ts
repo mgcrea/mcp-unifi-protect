@@ -1,33 +1,11 @@
-/** A non-2xx answer from the console. */
-export class ProtectApiError extends Error {
-  override readonly name = "ProtectApiError";
-  readonly status: number;
-  /** The request path, so an error names what failed without a stack trace. */
-  readonly path: string | undefined;
-  readonly errors: unknown;
-
-  constructor(
-    message: string,
-    opts: { status: number; path?: string | undefined; errors?: unknown },
-  ) {
-    super(message);
-    this.status = opts.status;
-    this.path = opts.path;
-    this.errors = opts.errors;
-  }
-}
-
-/** The console rejected the credentials, or 2FA is required and was not supplied. */
-export class ProtectAuthError extends Error {
-  override readonly name = "ProtectAuthError";
-  /** True when the console asked for a 2FA code rather than refusing the password. */
-  readonly needsTwoFactor: boolean;
-
-  constructor(message: string, opts: { needsTwoFactor?: boolean } = {}) {
-    super(message);
-    this.needsTwoFactor = opts.needsTwoFactor ?? false;
-  }
-}
+/**
+ * Errors this server raises on its own behalf.
+ *
+ * The console-facing taxonomy — `ProtectApiError`, `ProtectAuthError`,
+ * `ProtectTlsError` — belongs to `@mgcrea/unifi-protect` and is re-exported
+ * here so callers still have one import for all of them.
+ */
+export { ProtectApiError, ProtectAuthError, ProtectTlsError } from "@mgcrea/unifi-protect";
 
 /** Thrown when a write path is reached while UNIFI_PROTECT_ALLOW_WRITES is off. */
 export class WritesDisabledError extends Error {

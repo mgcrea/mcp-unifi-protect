@@ -1,7 +1,7 @@
+import type { ProtectClient } from "@mgcrea/unifi-protect";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import type { ProtectClient } from "#/client/protect";
 import {
   summarizeBootstrap,
   summarizeEach,

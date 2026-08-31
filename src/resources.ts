@@ -1,8 +1,8 @@
+import type { ProtectClient } from "@mgcrea/unifi-protect";
 import type { McpServer } from "@modelcontextprotocol/server";
 
 import { cameraFacts } from "#/client/detection";
 import { availableLocations } from "#/client/locations";
-import type { ProtectClient } from "#/client/protect";
 import { summarizeNvr } from "#/client/shape";
 import type { Config } from "#/config";
 

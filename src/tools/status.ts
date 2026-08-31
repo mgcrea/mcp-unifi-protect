@@ -1,12 +1,50 @@
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 
+import type { ProtectClient } from "@mgcrea/unifi-protect";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import type { ProtectClient } from "#/client/protect";
-import { isConfigured, setupInstructions } from "#/config";
+import { isConfigured, setupInstructions, type Config } from "#/config";
 import type { ToolContext } from "#/tools/index";
 import { confirmArg, wrap } from "#/tools/util";
+
+/**
+ * What the pin actually is right now, read from disk.
+ *
+ * Worth reporting rather than assuming: the certificate is pinned lazily on the
+ * first request, so a freshly started server has no pin yet — and saying
+ * "verified" then would claim something that has not happened.
+ */
+const pinStatus = (config: Config): string => {
+  const record = readTrust(config.trustFile);
+  if (record) {
+    return (
+      `verified — pinned to the certificate ${config.trustFile} records for ${record.host} ` +
+      `(SHA-256 ${record.fingerprint}, first seen ${record.seenAt}). A changed certificate is ` +
+      `refused; delete that file to trust a genuinely reissued one.`
+    );
+  }
+  return config.fingerprint
+    ? `verified — will be pinned to the configured fingerprint on the first request.`
+    : `verified — the console's certificate will be pinned on the first request and stored in ` +
+        `${config.trustFile}. Set UNIFI_PROTECT_FINGERPRINT to make that trust explicit rather ` +
+        `than learned.`;
+};
+
+/** The stored pin, or undefined when nothing has been pinned yet. */
+const readTrust = (
+  path: string,
+): { host: string; fingerprint: string; seenAt: string } | undefined => {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+    if (typeof parsed !== "object" || parsed === null) return undefined;
+    const { host, fingerprint, seenAt } = parsed as Record<string, unknown>;
+    if (typeof host !== "string" || typeof fingerprint !== "string") return undefined;
+    return { host, fingerprint, seenAt: typeof seenAt === "string" ? seenAt : "unknown" };
+  } catch {
+    return undefined;
+  }
+};
 
 const fileMode = (path: string): number | undefined => {
   try {
@@ -135,10 +173,10 @@ export const registerStatusTools = (
             ctx.config.mode === "cloud"
               ? "verified (api.ui.com presents a real certificate; the console's self-signed one is never seen)"
               : ctx.config.verifyTls
-                ? "verified"
-                : "UNVERIFIED — certificate checks are off for this server's requests only. " +
-                  "Verifying needs both NODE_EXTRA_CA_CERTS pointing at the console certificate and " +
-                  "UNIFI_PROTECT_HOST set to a host name: the certificate carries no IP SAN.",
+                ? pinStatus(ctx.config)
+                : "UNVERIFIED — certificate checks are off for this server's requests only " +
+                  "(UNIFI_PROTECT_VERIFY_TLS=false). Unset it to pin the console's certificate " +
+                  "instead, which works even when the console is addressed by IP.",
           writes: ctx.allowWrites ? "enabled" : "disabled",
           api:
             "private (undocumented). Ubiquiti moves these endpoints between Protect releases, so " +

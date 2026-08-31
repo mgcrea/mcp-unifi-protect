@@ -94,16 +94,25 @@ const ConfigSchema = z
      */
     totp: z.string().min(1).optional(),
     /**
-     * On by default. Turning it off is scoped to this server's own requests via
-     * an undici dispatcher, not the whole process.
+     * On by default, and now satisfiable by IP: the console's certificate is
+     * pinned on first contact and verified as its own anchor thereafter, with
+     * the host name check replaced by a fingerprint comparison.
      *
-     * Verifying takes two things together, and one alone does nothing: the
-     * console's certificate is self-signed (so NODE_EXTRA_CA_CERTS must point at
-     * it) AND it carries no IP SAN — `CN=unifi.local`, SANs for `unifi.local`,
-     * `localhost` and `127.0.0.1` — so UNIFI_PROTECT_HOST must be a host name
-     * that resolves to the console, never its IP address.
+     * This used to require NODE_EXTRA_CA_CERTS *and* a host name that resolved
+     * to the console, because the certificate carries no IP SAN —
+     * `CN=unifi.local`, SANs for `unifi.local`, `localhost` and `127.0.0.1`.
+     * Pinning removes both requirements. Turning verification off remains
+     * scoped to this server's own requests, never the whole process.
      */
     verifyTls: z.boolean().default(true),
+    /** Where the pinned console certificate is remembered across restarts. */
+    trustFile: z.string().min(1),
+    /**
+     * A fingerprint supplied up front, which makes the trust explicit rather
+     * than learned on first contact. SHA-256 of the certificate, hex; the
+     * separators in `AB:CD:...` are ignored.
+     */
+    fingerprint: z.string().min(1).optional(),
     allowWrites: z.boolean().default(false),
     sessionFile: z.string().min(1),
     snapshotDir: z.string().min(1),
@@ -170,6 +179,8 @@ const FileConfigSchema = z
     username: z.string().min(1).optional(),
     password: z.string().min(1).optional(),
     verifyTls: z.boolean().optional(),
+    trustFile: z.string().min(1).optional(),
+    fingerprint: z.string().min(1).optional(),
     allowWrites: z.boolean().optional(),
     sessionFile: z.string().min(1).optional(),
     snapshotDir: z.string().min(1).optional(),
@@ -244,6 +255,13 @@ export const resolveConfigPath = (env: NodeJS.ProcessEnv = process.env): string 
 /** The session file sits beside the config file unless told otherwise. */
 export const resolveSessionPath = (env: NodeJS.ProcessEnv = process.env): string =>
   join(dirname(resolveConfigPath(env)), "session.json");
+
+/**
+ * Where the console's pinned certificate is remembered, beside the session it
+ * authenticates. Not a secret, but it decides what this server will talk to.
+ */
+export const resolveTrustPath = (env: NodeJS.ProcessEnv = process.env): string =>
+  join(dirname(resolveConfigPath(env)), "trust.json");
 
 /**
  * The session file holds a live console cookie, so being readable by other
@@ -341,6 +359,8 @@ export const loadConfig = (
   const host = trimmed(env.UNIFI_PROTECT_HOST) ?? file.host;
   const sessionFile =
     trimmed(env.UNIFI_PROTECT_SESSION_FILE) ?? file.sessionFile ?? resolveSessionPath(env);
+  const trustFile =
+    trimmed(env.UNIFI_PROTECT_TRUST_FILE) ?? file.trustFile ?? resolveTrustPath(env);
   const snapshotDir =
     trimmed(env.UNIFI_PROTECT_SNAPSHOT_DIR) ??
     file.snapshotDir ??
@@ -408,6 +428,8 @@ export const loadConfig = (
     password,
     totp: trimmed(env.UNIFI_PROTECT_TOTP),
     verifyTls: parseBool(env.UNIFI_PROTECT_VERIFY_TLS) ?? file.verifyTls,
+    trustFile: expandTilde(trustFile),
+    fingerprint: trimmed(env.UNIFI_PROTECT_FINGERPRINT) ?? file.fingerprint,
     allowWrites: parseBool(env.UNIFI_PROTECT_ALLOW_WRITES) ?? file.allowWrites,
     sessionFile: expandTilde(sessionFile),
     snapshotDir: expandTilde(snapshotDir),
