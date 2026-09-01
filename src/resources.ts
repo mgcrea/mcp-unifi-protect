@@ -16,7 +16,7 @@ const json = (uri: URL, data: unknown) => ({
     {
       uri: uri.href,
       mimeType: "application/json",
-      text: JSON.stringify(data, null, 2),
+      text: JSON.stringify(data),
     },
   ],
 });

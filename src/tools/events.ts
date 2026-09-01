@@ -422,7 +422,7 @@ export const registerEventTools = (
         if (failed.length > 0) {
           content.push({
             type: "text",
-            text: JSON.stringify({ failed }, null, 2),
+            text: JSON.stringify({ failed }),
           });
         }
         if (content.length === 0) {
