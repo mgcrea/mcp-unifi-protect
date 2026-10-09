@@ -372,25 +372,25 @@ describe("destructive tools", () => {
   });
 });
 
+const routed = (events: unknown[] = []) =>
+  fetchMock(async (url) => {
+    const href = String(url);
+    if (href.includes("/cameras")) return jsonResponse([GATED_CAMERA]);
+    if (href.includes("/nvr")) return jsonResponse({ timezone: "Europe/Paris" });
+    return jsonResponse(events);
+  });
+
+const callEvents = async (
+  args: Record<string, unknown>,
+  impl = routed(),
+): Promise<{ payload: Record<string, unknown>; impl: ReturnType<typeof routed> }> => {
+  const client = await connect(baseConfig, impl as unknown as typeof fetch);
+  const result = await client.callTool({ name: "unifi_protect_list_events", arguments: args });
+  const text = (result.content as { text: string }[])[0]!.text;
+  return { payload: JSON.parse(text) as Record<string, unknown>, impl };
+};
+
 describe("list_events", () => {
-  const routed = (events: unknown[] = []) =>
-    fetchMock(async (url) => {
-      const href = String(url);
-      if (href.includes("/cameras")) return jsonResponse([GATED_CAMERA]);
-      if (href.includes("/nvr")) return jsonResponse({ timezone: "Europe/Paris" });
-      return jsonResponse(events);
-    });
-
-  const callEvents = async (
-    args: Record<string, unknown>,
-    impl = routed(),
-  ): Promise<{ payload: Record<string, unknown>; impl: ReturnType<typeof routed> }> => {
-    const client = await connect(baseConfig, impl as unknown as typeof fetch);
-    const result = await client.callTool({ name: "unifi_protect_list_events", arguments: args });
-    const text = (result.content as { text: string }[])[0]!.text;
-    return { payload: JSON.parse(text) as Record<string, unknown>, impl };
-  };
-
   it("filters by camera ON THE CONSOLE rather than after the fact", async () => {
     // Filtering client-side fetched the newest `limit` events across ALL
     // cameras and discarded most, so a quiet camera over a long window came
@@ -458,34 +458,34 @@ describe("list_events", () => {
   });
 });
 
-describe("set_camera_detections", () => {
-  const routed = () =>
-    fetchMock(async (url, init) => {
-      const method = (init as { method?: string } | undefined)?.method ?? "GET";
-      if (method === "PATCH") {
-        return jsonResponse({
-          ...GATED_CAMERA,
-          smartDetectSettings: { objectTypes: ["person", "animal"], audioTypes: ["alrmSpeak"] },
-          smartDetectZones: [{ id: 1, objectTypes: ["person", "animal"] }],
-        });
-      }
+const routedDetections = () =>
+  fetchMock(async (url, init) => {
+    const method = (init as { method?: string } | undefined)?.method ?? "GET";
+    if (method === "PATCH") {
       return jsonResponse({
         ...GATED_CAMERA,
-        featureFlags: {
-          ...GATED_CAMERA.featureFlags,
-          smartDetectAudioTypes: ["alrmSmoke", "alrmSpeak"],
-        },
-        smartDetectSettings: {
-          objectTypes: ["animal"],
-          audioTypes: ["alrmSmoke", "smoke_cmonx"],
-        },
+        smartDetectSettings: { objectTypes: ["person", "animal"], audioTypes: ["alrmSpeak"] },
+        smartDetectZones: [{ id: 1, objectTypes: ["person", "animal"] }],
       });
+    }
+    return jsonResponse({
+      ...GATED_CAMERA,
+      featureFlags: {
+        ...GATED_CAMERA.featureFlags,
+        smartDetectAudioTypes: ["alrmSmoke", "alrmSpeak"],
+      },
+      smartDetectSettings: {
+        objectTypes: ["animal"],
+        audioTypes: ["alrmSmoke", "smoke_cmonx"],
+      },
     });
+  });
 
+describe("set_camera_detections", () => {
   it("drops values the console reports but refuses on write", async () => {
     // smoke_cmonx comes out of every read and fails every PATCH with
     // "The smart detection feature is not enabled for: smoke_cmonx".
-    const impl = routed();
+    const impl = routedDetections();
     const client = await connect(
       { ...baseConfig, allowWrites: true },
       impl as unknown as typeof fetch,
@@ -504,7 +504,7 @@ describe("set_camera_detections", () => {
   });
 
   it("brings the zones into line so none asks for a blocked type", async () => {
-    const impl = routed();
+    const impl = routedDetections();
     const client = await connect(
       { ...baseConfig, allowWrites: true },
       impl as unknown as typeof fetch,
@@ -525,7 +525,7 @@ describe("set_camera_detections", () => {
   it("rejects a type the camera cannot do, naming what it supports", async () => {
     const client = await connect(
       { ...baseConfig, allowWrites: true },
-      routed() as unknown as typeof fetch,
+      routedDetections() as unknown as typeof fetch,
     );
     const result = await client.callTool({
       name: "unifi_protect_set_camera_detections",
