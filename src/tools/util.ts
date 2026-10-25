@@ -319,7 +319,8 @@ export const cameraIdArg = z
 /** The shared prose for every time argument, so the trap is stated everywhere it applies. */
 const timeHelp = (role: string): string =>
   `${role} Accepts ISO 8601 ("2026-08-29T22:00:00Z"), a relative expression ("2h ago", ` +
-  `"30m", "7d"), or "now". Converted to the millisecond epoch the console requires — do ` +
+  `"30m", "7d"), or "now". Local times ("1am", "2026-08-30 01:00") are read in the ` +
+  `console's own time zone. Converted to the millisecond epoch the console requires — do ` +
   `not pass Unix seconds, which would silently query 1970 and return nothing.`;
 
 export const timeArg = (role: string) => z.string().optional().describe(timeHelp(role));
