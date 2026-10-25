@@ -8,7 +8,15 @@ import { z } from "zod";
 import { cameraFacts, GATED_OBJECT_TYPES } from "#/client/detection";
 import { summarizeCamera, summarizeEach } from "#/client/shape";
 import type { ToolContext } from "#/tools/index";
-import { cameraIdArg, compactOrUndefined, confirmArg, ok, wrap, wrapResult } from "#/tools/util";
+import {
+  cameraIdArg,
+  compactOrUndefined,
+  confirmArg,
+  imageContent,
+  ok,
+  wrap,
+  wrapResult,
+} from "#/tools/util";
 
 type Rec = Record<string, unknown>;
 
@@ -114,13 +122,7 @@ export const registerCameraTools = (
 
         if (output === "image") {
           return {
-            content: [
-              {
-                type: "image" as const,
-                data: Buffer.from(bytes).toString("base64"),
-                mimeType: contentType.startsWith("image/") ? contentType : "image/jpeg",
-              },
-            ],
+            content: [imageContent(bytes, contentType)],
           };
         }
 

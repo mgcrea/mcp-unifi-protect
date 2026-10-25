@@ -14,6 +14,7 @@ import {
   limitArg,
   localTime,
   fail,
+  imageContent,
   ok,
   requiredTimeArg,
   timeArg,
@@ -327,13 +328,7 @@ export const registerEventTools = (
 
         if (output === "image") {
           return {
-            content: [
-              {
-                type: "image" as const,
-                data: Buffer.from(bytes).toString("base64"),
-                mimeType: contentType.startsWith("image/") ? contentType : "image/jpeg",
-              },
-            ],
+            content: [imageContent(bytes, contentType)],
           };
         }
 
@@ -390,11 +385,7 @@ export const registerEventTools = (
               // Label each frame, or six images arrive with nothing saying
               // which event each one belongs to.
               content.push({ type: "text", text: `event ${id}` });
-              content.push({
-                type: "image",
-                data: Buffer.from(bytes).toString("base64"),
-                mimeType: contentType.startsWith("image/") ? contentType : "image/jpeg",
-              });
+              content.push(imageContent(bytes, contentType));
             } else {
               const path = join(ctx.config.snapshotDir, `event-${slugId(id)}.jpg`);
               await mkdir(join(path, ".."), { recursive: true });

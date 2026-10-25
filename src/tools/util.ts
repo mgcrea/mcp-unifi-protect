@@ -69,6 +69,19 @@ export const wrapResult = async (fn: () => Promise<ToolResult>): Promise<ToolRes
   }
 };
 
+/**
+ * An inline image block. Every caller asks the console for `image/jpeg`, so a
+ * response labelled with anything that is not an image type is taken as one.
+ */
+export const imageContent = (
+  bytes: Uint8Array,
+  contentType: string,
+): Extract<ToolResult["content"][number], { type: "image" }> => ({
+  type: "image",
+  data: Buffer.from(bytes).toString("base64"),
+  mimeType: contentType.startsWith("image/") ? contentType : "image/jpeg",
+});
+
 /** Drop undefined values so we never send `{"name": undefined}` to the console. */
 export const compact = <T extends Record<string, unknown>>(obj: T): Partial<T> =>
   Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
