@@ -458,6 +458,31 @@ describe("list_events", () => {
   });
 });
 
+describe("export_video", () => {
+  it("reads local times in the console's own zone, as list_events does", async () => {
+    // A zone that is neither this machine's nor CI's, so falling back to the
+    // process zone cannot pass by accident.
+    const impl = fetchMock(async (url) => {
+      const href = String(url);
+      if (href.includes("/cameras")) return jsonResponse([GATED_CAMERA]);
+      if (href.includes("/nvr")) return jsonResponse({ timezone: "Asia/Tokyo" });
+      return new Response(new Uint8Array([0]), { headers: { "content-type": "video/mp4" } });
+    });
+    const client = await connect(baseConfig, impl as unknown as typeof fetch);
+    const result = await client.callTool({
+      name: "unifi_protect_export_video",
+      arguments: { cameraId: "cam1", start: "2026-08-30 01:00", end: "2026-08-30 01:05" },
+    });
+    const payload = JSON.parse((result.content as { text: string }[])[0]!.text) as {
+      window?: { start: string; end: string };
+    };
+    expect(payload.window).toEqual({
+      start: "2026-08-29T16:00:00.000Z",
+      end: "2026-08-29T16:05:00.000Z",
+    });
+  });
+});
+
 const routedDetections = () =>
   fetchMock(async (url, init) => {
     const method = (init as { method?: string } | undefined)?.method ?? "GET";

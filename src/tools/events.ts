@@ -469,8 +469,11 @@ export const registerEventTools = (
     },
     async ({ cameraId, start, end, savePath, channel }) =>
       wrap(async () => {
-        const startMs = toEpochMs(start);
-        const endMs = toEpochMs(end);
+        // Read in the console's zone, as list_events does, so a local time
+        // copied from a search result exports the footage it pointed at.
+        const timeZone = ctx.config.timeZone ?? (await ctx.devices.timeZone());
+        const endMs = toEpochMs(end, { timeZone });
+        const startMs = toEpochMs(start, { timeZone, before: endMs });
         if (startMs >= endMs) {
           throw new Error(
             `The window is empty: start (${new Date(startMs).toISOString()}) is not before end ` +
