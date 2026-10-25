@@ -150,14 +150,15 @@ export const registerEventTools = (
 
         // Resolve the scope first: the time window's local interpretation does
         // not depend on it, but every warning below does.
+        const resolved = location
+          ? resolveLocation(location, ctx.config.locations, facts)
+          : { ids: [], unmatched: [] };
         const scope = new Set<string>([
           ...(cameraId ? [cameraId] : []),
           ...(cameraIds ?? []),
-          ...(location ? resolveLocation(location, ctx.config.locations, facts).ids : []),
+          ...resolved.ids,
         ]);
-        const unmatched = location
-          ? resolveLocation(location, ctx.config.locations, facts).unmatched
-          : [];
+        const { unmatched } = resolved;
 
         // "1am" means 1am WHERE THE CAMERAS ARE. Falling back to this process's
         // zone would quietly return a different night's footage.
