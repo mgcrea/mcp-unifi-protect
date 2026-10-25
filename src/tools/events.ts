@@ -322,15 +322,8 @@ export const registerEventTools = (
     },
     async ({ eventId, output, savePath }) =>
       wrapResult(async () => {
-        // The console reports an event's thumbnail as `e-<eventId>`, but that
-        // form belongs to `thumbnails/<id>`; `events/<id>/thumbnail` wants the
-        // bare event id. Strip the prefix so either value works rather than
-        // making the caller know which endpoint this happens to use.
-        const id = eventId.startsWith("e-") ? eventId.slice(2) : eventId;
-        const { bytes, contentType } = await client.requestBytes(
-          `events/${encodeURIComponent(id)}/thumbnail`,
-          { accept: "image/jpeg" },
-        );
+        const id = thumbnailEventId(eventId);
+        const { bytes, contentType } = await fetchThumbnail(client, id);
 
         if (output === "image") {
           return {
@@ -390,12 +383,9 @@ export const registerEventTools = (
         const paths: { eventId: string; path: string; bytes: number }[] = [];
 
         for (const eventId of eventIds) {
-          const id = eventId.startsWith("e-") ? eventId.slice(2) : eventId;
+          const id = thumbnailEventId(eventId);
           try {
-            const { bytes, contentType } = await client.requestBytes(
-              `events/${encodeURIComponent(id)}/thumbnail`,
-              { accept: "image/jpeg" },
-            );
+            const { bytes, contentType } = await fetchThumbnail(client, id);
             if (output === "image") {
               // Label each frame, or six images arrive with nothing saying
               // which event each one belongs to.
@@ -504,6 +494,18 @@ export const registerEventTools = (
       }),
   );
 };
+
+/**
+ * The console reports an event's thumbnail as `e-<eventId>`, but that form
+ * belongs to `thumbnails/<id>`; `events/<id>/thumbnail` wants the bare event
+ * id. Strip the prefix so either value works rather than making the caller know
+ * which endpoint this happens to use.
+ */
+const thumbnailEventId = (eventId: string): string =>
+  eventId.startsWith("e-") ? eventId.slice(2) : eventId;
+
+const fetchThumbnail = (client: ProtectClient, id: string) =>
+  client.requestBytes(`events/${encodeURIComponent(id)}/thumbnail`, { accept: "image/jpeg" });
 
 const slugId = (value: string): string =>
   value
