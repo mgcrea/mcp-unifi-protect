@@ -315,6 +315,14 @@ describe("toEpochMs in the console's time zone", () => {
     expect(() => toEpochMs("1am", { now })).toThrow(/time zone/);
   });
 
+  it("refuses a naive date or date-time without a zone, rather than guessing one", () => {
+    // Date.parse reads "2026-08-30 01:00" in THIS process's zone and
+    // "2026-08-30" as UTC: a guess either way, and a different night's footage.
+    expect(() => toEpochMs("2026-08-30 01:00", { now })).toThrow(/time zone/);
+    expect(() => toEpochMs("2026-08-30T01:00", { now })).toThrow(/time zone/);
+    expect(() => toEpochMs("2026-08-30", { now })).toThrow(/time zone/);
+  });
+
   it("keeps the old positional now argument working", () => {
     expect(toEpochMs("2h ago", now)).toBe(now - 7_200_000);
   });

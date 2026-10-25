@@ -280,6 +280,15 @@ export const toEpochMs = (value: string | number, opts: number | TimeOptions = {
       // "1am" asked at midday means this morning, not tomorrow morning.
       return candidate <= anchor ? candidate : candidate - 86_400_000;
     }
+  } else if (NAIVE_DATETIME.test(text) || NAIVE_DATE.test(text)) {
+    // Date.parse would accept these, reading a date-time in THIS process's zone
+    // and a bare date as UTC. Either is a guess at the console's clock, so they
+    // are refused like "1am" rather than answered for the wrong night.
+    throw new Error(
+      `"${value}" is a local time, and local times need the console's time zone, which is ` +
+        `unavailable here. Pass ISO 8601 with a Z or an offset ("2026-08-29T22:00:00Z"), or ` +
+        `set UNIFI_PROTECT_TIMEZONE.`,
+    );
   }
 
   const parsed = Date.parse(text);

@@ -235,8 +235,9 @@ export const registerEventTools = (
             : []),
           ...(timeZone === undefined
             ? [
-                "The console's time zone could not be read, so times were interpreted as UTC. " +
-                  "Set UNIFI_PROTECT_TIMEZONE if local times matter.",
+                'The console\'s time zone could not be read, so local times such as "1am" are ' +
+                  "refused and results carry UTC times only. Set UNIFI_PROTECT_TIMEZONE if " +
+                  "local times matter.",
               ]
             : []),
         ];
