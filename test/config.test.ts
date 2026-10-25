@@ -96,6 +96,37 @@ describe("loadConfig", () => {
     }
   });
 
+  it("ignores an out-of-range number and reports it, rather than exiting", () => {
+    // UNIFI_PROTECT_MAX_RETRIES=20 used to fail ConfigSchema.parse and exit
+    // the process at startup.
+    const env = {
+      UNIFI_PROTECT_MAX_RETRIES: "20",
+      UNIFI_PROTECT_DEVICE_CACHE_TTL: "-1",
+      UNIFI_PROTECT_MAX_DOWNLOAD_BYTES: "0",
+    };
+    expect(() => loadConfig(env, NO_FILE)).not.toThrow();
+    const c = loadConfig(env, NO_FILE);
+    expect(c.maxRetries).toBe(3);
+    expect(c.deviceCacheTtlSeconds).toBe(60);
+    expect(c.maxDownloadBytes).toBe(200_000_000);
+    const issues = c.issues.join(" ");
+    expect(issues).toMatch(/UNIFI_PROTECT_MAX_RETRIES/);
+    expect(issues).toMatch(/UNIFI_PROTECT_DEVICE_CACHE_TTL/);
+    expect(issues).toMatch(/UNIFI_PROTECT_MAX_DOWNLOAD_BYTES/);
+  });
+
+  it("reports a number that is not a number, rather than ignoring it silently", () => {
+    const c = loadConfig({ UNIFI_PROTECT_MAX_RETRIES: "abc" }, NO_FILE);
+    expect(c.maxRetries).toBe(3);
+    expect(c.issues.join(" ")).toMatch(/UNIFI_PROTECT_MAX_RETRIES/);
+  });
+
+  it("still reads a valid number from the environment", () => {
+    const c = loadConfig({ UNIFI_PROTECT_MAX_RETRIES: " 5 " }, NO_FILE);
+    expect(c.maxRetries).toBe(5);
+    expect(c.issues).toEqual([]);
+  });
+
   it("names the API-key trap when a key is set in local mode", () => {
     // Verified on a UNVR running Protect 7.2.105: a console-issued key answers
     // 200 on the official Integration API and 401 on every private path.

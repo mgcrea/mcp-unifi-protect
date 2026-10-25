@@ -71,6 +71,14 @@ export const normalizeMode = (value: string): Mode | undefined => {
   return MODE_ALIASES[key];
 };
 
+/**
+ * The numeric settings' bounds, shared by the resolved config, the config file
+ * and the environment check in `envNumber`, so the three cannot disagree.
+ */
+const MaxRetries = z.number().int().nonnegative().max(10);
+const MaxDownloadBytes = z.number().int().positive();
+const DeviceCacheTtlSeconds = z.number().int().nonnegative().max(3600);
+
 const ConfigSchema = z
   .object({
     mode: z.enum(MODES).default("local"),
@@ -116,11 +124,11 @@ const ConfigSchema = z
     allowWrites: z.boolean().default(false),
     sessionFile: z.string().min(1),
     snapshotDir: z.string().min(1),
-    maxRetries: z.number().int().nonnegative().max(10).default(3),
+    maxRetries: MaxRetries.default(3),
     /** Guards against an unexpectedly huge video export blowing up the process. */
-    maxDownloadBytes: z.number().int().positive().default(200_000_000),
+    maxDownloadBytes: MaxDownloadBytes.default(200_000_000),
     /** How long a cached camera id→name index stays fresh, in seconds. */
-    deviceCacheTtlSeconds: z.number().int().nonnegative().max(3600).default(60),
+    deviceCacheTtlSeconds: DeviceCacheTtlSeconds.default(60),
     /**
      * IANA zone for interpreting and rendering local times. Left undefined the
      * console's own `nvr.timezone` is used, which is nearly always what someone
@@ -184,9 +192,9 @@ const FileConfigSchema = z
     allowWrites: z.boolean().optional(),
     sessionFile: z.string().min(1).optional(),
     snapshotDir: z.string().min(1).optional(),
-    maxRetries: z.number().int().nonnegative().max(10).optional(),
-    maxDownloadBytes: z.number().int().positive().optional(),
-    deviceCacheTtlSeconds: z.number().int().nonnegative().max(3600).optional(),
+    maxRetries: MaxRetries.optional(),
+    maxDownloadBytes: MaxDownloadBytes.optional(),
+    deviceCacheTtlSeconds: DeviceCacheTtlSeconds.optional(),
     timeZone: z.string().min(1).optional(),
     locations: z.record(z.string(), z.array(z.string())).optional(),
   })
@@ -221,12 +229,6 @@ const parseBool = (value: string | undefined): boolean | undefined => {
   const t = trimmed(value);
   if (t === undefined) return undefined;
   return ["1", "true", "yes", "on"].includes(t.toLowerCase());
-};
-
-const parseIntOpt = (value: string | undefined): number | undefined => {
-  if (value === undefined || value.trim() === "") return undefined;
-  const n = Number(value);
-  return Number.isInteger(n) ? n : undefined;
 };
 
 /** Maps "" to undefined, so an empty env var means "unset" rather than "empty". */
@@ -417,6 +419,20 @@ export const loadConfig = (
     );
   }
 
+  const maxRetries = envNumber("UNIFI_PROTECT_MAX_RETRIES", MaxRetries, env, issues);
+  const maxDownloadBytes = envNumber(
+    "UNIFI_PROTECT_MAX_DOWNLOAD_BYTES",
+    MaxDownloadBytes,
+    env,
+    issues,
+  );
+  const deviceCacheTtlSeconds = envNumber(
+    "UNIFI_PROTECT_DEVICE_CACHE_TTL",
+    DeviceCacheTtlSeconds,
+    env,
+    issues,
+  );
+
   return ConfigSchema.parse({
     mode,
     modeSource: source,
@@ -433,13 +449,36 @@ export const loadConfig = (
     allowWrites: parseBool(env.UNIFI_PROTECT_ALLOW_WRITES) ?? file.allowWrites,
     sessionFile: expandTilde(sessionFile),
     snapshotDir: expandTilde(snapshotDir),
-    maxRetries: parseIntOpt(env.UNIFI_PROTECT_MAX_RETRIES) ?? file.maxRetries,
-    maxDownloadBytes: parseIntOpt(env.UNIFI_PROTECT_MAX_DOWNLOAD_BYTES) ?? file.maxDownloadBytes,
-    deviceCacheTtlSeconds:
-      parseIntOpt(env.UNIFI_PROTECT_DEVICE_CACHE_TTL) ?? file.deviceCacheTtlSeconds,
+    maxRetries: maxRetries ?? file.maxRetries,
+    maxDownloadBytes: maxDownloadBytes ?? file.maxDownloadBytes,
+    deviceCacheTtlSeconds: deviceCacheTtlSeconds ?? file.deviceCacheTtlSeconds,
     timeZone: trimmed(env.UNIFI_PROTECT_TIMEZONE) ?? file.timeZone,
     locations: locations ?? file.locations,
   });
+};
+
+/**
+ * Read a numeric setting from the environment.
+ *
+ * A value that is not a number, or is out of range, must never stop the server
+ * (rule 2): an out-of-range one used to fail `ConfigSchema.parse` and exit the
+ * process. It collects into `issues` and the file or the default applies.
+ */
+const envNumber = (
+  name: string,
+  schema: z.ZodNumber,
+  env: NodeJS.ProcessEnv,
+  issues: string[],
+): number | undefined => {
+  const text = trimmed(env[name]);
+  if (text === undefined) return undefined;
+  const result = schema.safeParse(Number(text));
+  if (result.success) return result.data;
+  issues.push(
+    `${name} is "${text}", which is not usable (${result.error.issues[0]?.message ?? "invalid"}). ` +
+      "It was ignored.",
+  );
+  return undefined;
 };
 
 /**
