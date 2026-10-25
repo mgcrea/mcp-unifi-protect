@@ -13,7 +13,13 @@ import { registerSystemTools } from "#/tools/system";
 
 export type ToolContext = {
   config: Config;
-  /** Register the mutating tools too. Off by default — see UNIFI_PROTECT_ALLOW_WRITES. */
+  /**
+   * Register the mutating tools too. Off by default — see UNIFI_PROTECT_ALLOW_WRITES.
+   *
+   * @deprecated Duplicates `config.allowWrites`, and the two can disagree. Pass
+   * the same value as `config.allowWrites`; this field goes in the next major.
+   * It is still the one the tools read until then.
+   */
   allowWrites: boolean;
   session: SessionProvider;
   devices: DeviceCache;
