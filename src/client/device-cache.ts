@@ -82,8 +82,9 @@ export const createDeviceCache = (opts: DeviceCacheOptions): DeviceCache => {
         value = typeof nvr?.timezone === "string" && nvr.timezone ? nvr.timezone : undefined;
       } catch {
         // A zone lookup must never fail a search. Without it, naive local times
-        // are rejected with a message saying so rather than guessed at.
-        value = undefined;
+        // are rejected with a message saying so rather than guessed at. Not
+        // cached, like a failed camera list: the next search asks again.
+        return undefined;
       }
       zone = { value, expiresAt: now() + Math.max(ttlMs, 3_600_000) };
       return value;
