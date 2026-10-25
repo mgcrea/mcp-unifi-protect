@@ -458,6 +458,43 @@ describe("list_events", () => {
   });
 });
 
+describe("event thumbnails", () => {
+  const jpeg = () =>
+    fetchMock(
+      async () =>
+        new Response(new Uint8Array([0xff, 0xd8]), {
+          headers: { "content-type": "image/jpeg" },
+        }),
+    );
+
+  it("accepts the console's own e- form and asks events/<id>/thumbnail for it", async () => {
+    const impl = jpeg();
+    const client = await connect(baseConfig, impl as unknown as typeof fetch);
+    const result = await client.callTool({
+      name: "unifi_protect_get_event_thumbnail",
+      arguments: { eventId: "e-evt9", output: "image" },
+    });
+    expect(calledUrl(impl)).toContain("/events/evt9/thumbnail");
+    expect((result.content as { type: string }[])[0]!.type).toBe("image");
+  });
+
+  it("labels each frame of a batch with its bare event id", async () => {
+    const impl = jpeg();
+    const client = await connect(baseConfig, impl as unknown as typeof fetch);
+    const result = await client.callTool({
+      name: "unifi_protect_get_event_thumbnails",
+      arguments: { eventIds: ["e-evt1", "evt2"] },
+    });
+    const content = result.content as { type: string; text?: string }[];
+    expect(content.filter((c) => c.type === "text").map((c) => c.text)).toEqual([
+      "event evt1",
+      "event evt2",
+    ]);
+    expect(calledUrl(impl, 0)).toContain("/events/evt1/thumbnail");
+    expect(calledUrl(impl, 1)).toContain("/events/evt2/thumbnail");
+  });
+});
+
 describe("export_video", () => {
   it("reads local times in the console's own zone, as list_events does", async () => {
     // A zone that is neither this machine's nor CI's, so falling back to the
