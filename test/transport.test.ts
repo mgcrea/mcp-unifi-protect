@@ -114,4 +114,21 @@ describe("createLazyTransport", () => {
     await expect(transport.fetch("https://192.168.1.1/a")).rejects.toThrow(/console unreachable/);
     await expect(transport.close()).resolves.toBeUndefined();
   });
+
+  it("captures again after a failure, so a console that was asleep is reachable once awake", async () => {
+    // A failed call is the right answer while the console is down. Remembering
+    // that failure turns it into a server that needs a restart, which is the
+    // never-starting server this module exists to avoid, just reached later.
+    const inner = vi.fn(async () => new Response("{}"));
+    resolveTrust
+      .mockReset()
+      .mockRejectedValueOnce(new Error("console unreachable"))
+      .mockResolvedValue({ mode: "insecure" });
+    createTransport.mockReset().mockReturnValue({ fetch: inner, close: vi.fn() });
+
+    const transport = createLazyTransport({ config: config() });
+    await expect(transport.fetch("https://192.168.1.1/a")).rejects.toThrow(/console unreachable/);
+    await expect(transport.fetch("https://192.168.1.1/a")).resolves.toBeInstanceOf(Response);
+    expect(resolveTrust).toHaveBeenCalledTimes(2);
+  });
 });

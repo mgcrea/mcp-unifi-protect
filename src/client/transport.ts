@@ -62,6 +62,8 @@ export const createLazyTransport = (opts: LazyTransportOptions): LazyTransport =
 
   // Memoised on the promise rather than the result, so concurrent first calls
   // share one certificate capture instead of racing to write the trust file.
+  // A failed capture is forgotten, so the next request tries again: a console
+  // that was asleep must not need a server restart once it wakes.
   const transport = (): Promise<ProtectTransport> =>
     (pending ??= resolveTrust({
       host,
@@ -70,7 +72,12 @@ export const createLazyTransport = (opts: LazyTransportOptions): LazyTransport =
       ...(config.fingerprint ? { expectedFingerprint: config.fingerprint } : {}),
       insecure: !config.verifyTls,
       ...(logger ? { logger } : {}),
-    }).then((policy) => createTransport(policy, host)));
+    })
+      .then((policy) => createTransport(policy, host))
+      .catch((err: unknown) => {
+        pending = undefined;
+        throw err;
+      }));
 
   return {
     fetch: (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
