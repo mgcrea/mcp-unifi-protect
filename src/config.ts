@@ -316,12 +316,6 @@ const readConfigFile = (path: string): FileConfig => {
 };
 
 /**
- * Environment first, config file second, **per field** — not whole-source.
- * Docker and CI inject the environment and must keep working untouched, while a
- * one-off `UNIFI_PROTECT_ALLOW_WRITES=0` still has to override a file that says
- * `true`. Merging field by field is the only rule that gives both.
- */
-/**
  * Pick the mode from whichever credentials are present when none was named.
  * An explicit UNIFI_PROTECT_MODE always wins.
  *
@@ -350,6 +344,12 @@ const resolveMode = (
   return { mode: inferred, source: inferred === "cloud" ? "inferred" : "default" };
 };
 
+/**
+ * Environment first, config file second, **per field** — not whole-source.
+ * Docker and CI inject the environment and must keep working untouched, while a
+ * one-off `UNIFI_PROTECT_ALLOW_WRITES=0` still has to override a file that says
+ * `true`. Merging field by field is the only rule that gives both.
+ */
 export const loadConfig = (
   env: NodeJS.ProcessEnv = process.env,
   configPath: string = resolveConfigPath(env),
