@@ -166,7 +166,7 @@ const zonedDateParts = (ms: number, timeZone: string): [number, number, number] 
   return [field("year"), field("month"), field("day")];
 };
 
-const NAIVE_DATETIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?$/;
+const NAIVE_DATETIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?$/;
 const NAIVE_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const TIME_OF_DAY = /^(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*(am|pm)?$/i;
 
@@ -241,14 +241,18 @@ export const toEpochMs = (value: string | number, opts: number | TimeOptions = {
   if (timeZone) {
     const dt = NAIVE_DATETIME.exec(text);
     if (dt) {
-      return fromZoned(
-        Number(dt[1]),
-        Number(dt[2]),
-        Number(dt[3]),
-        Number(dt[4]),
-        Number(dt[5]),
-        Number(dt[6] ?? 0),
-        timeZone,
+      // Fractional seconds are kept to the millisecond, the console's resolution.
+      const ms = Number((dt[7] ?? "").padEnd(3, "0").slice(0, 3));
+      return (
+        fromZoned(
+          Number(dt[1]),
+          Number(dt[2]),
+          Number(dt[3]),
+          Number(dt[4]),
+          Number(dt[5]),
+          Number(dt[6] ?? 0),
+          timeZone,
+        ) + ms
       );
     }
 

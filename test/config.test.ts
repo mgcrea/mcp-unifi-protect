@@ -323,6 +323,15 @@ describe("toEpochMs in the console's time zone", () => {
     expect(() => toEpochMs("2026-08-30", { now })).toThrow(/time zone/);
   });
 
+  it("treats a naive time with fractional seconds like any other naive time", () => {
+    // It used to fall outside the naive pattern and reach Date.parse, which
+    // reads it in this process's zone whether or not the console's is known.
+    expect(
+      new Date(toEpochMs("2026-08-30T01:39:00.250", { now, timeZone: TZ })).toISOString(),
+    ).toBe("2026-08-29T23:39:00.250Z");
+    expect(() => toEpochMs("2026-08-30T01:39:00.250", { now })).toThrow(/time zone/);
+  });
+
   it("keeps the old positional now argument working", () => {
     expect(toEpochMs("2h ago", now)).toBe(now - 7_200_000);
   });
