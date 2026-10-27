@@ -81,6 +81,16 @@ export const summarizeCamera = (camera: Rec): Rec => {
   const flags = isRecord(camera.featureFlags) ? camera.featureFlags : {};
   const recording = isRecord(camera.recordingSettings) ? camera.recordingSettings : {};
   const smart = isRecord(camera.smartDetectSettings) ? camera.smartDetectSettings : {};
+  // Whether footage carries sound takes four things lining up: a mic in the
+  // hardware, the mic turned on, audio kept in the recording, and a recording
+  // at all — a camera set to "never" reports the other three as on. Without
+  // this the only way to ask "which cameras heard that" was the raw camera
+  // record, ~200 KB for a dozen cameras.
+  const recordsAudio =
+    flags.hasMic === true &&
+    camera.isMicEnabled === true &&
+    recording.recordAudio === true &&
+    recording.mode !== "never";
   return {
     id: camera.id,
     name: camera.name,
@@ -98,6 +108,9 @@ export const summarizeCamera = (camera: Rec): Rec => {
     hasPackageCamera: flags.hasPackageCamera ?? false,
     hasSmartDetect: flags.hasSmartDetect ?? false,
     smartDetectTypes: smart.objectTypes ?? [],
+    hasMic: flags.hasMic ?? false,
+    recordsAudio,
+    ...(typeof camera.micVolume === "number" ? { micVolume: camera.micVolume } : {}),
     firmwareVersion: camera.firmwareVersion,
     isUpdating: camera.isUpdating,
     lastSeen: isoTime(camera.lastSeen),

@@ -41,7 +41,8 @@ export const registerCameraTools = (
       description:
         "List every camera on the console with its id, name, connection state, recording mode, " +
         "firmware and what it can do (PTZ, package camera, smart detection, and which object " +
-        "types it detects). Returns a summary rather than the console's full camera record, " +
+        "types it detects), and whether its recordings carry sound (`recordsAudio`: a mic, " +
+        "switched on, with audio kept in the recording). Returns a summary rather than the console's full camera record, " +
         "which runs to thousands of fields across encoder profiles, zones and feature flags — " +
         "use unifi_protect_get_camera when you need all of it for one camera.",
       inputSchema: z.object({}),

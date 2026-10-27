@@ -34,9 +34,21 @@ describe("summarizeCamera", () => {
     isRecording: true,
     firmwareVersion: "4.70.55",
     lastSeen: 1_756_500_000_000,
-    recordingSettings: { mode: "detections", retentionDurationMs: null, prePaddingSecs: 2 },
+    isMicEnabled: true,
+    micVolume: 100,
+    recordingSettings: {
+      mode: "detections",
+      retentionDurationMs: null,
+      prePaddingSecs: 2,
+      recordAudio: true,
+    },
     smartDetectSettings: { objectTypes: ["person", "package"], audioTypes: [] },
-    featureFlags: { hasPackageCamera: true, hasSmartDetect: true, canOpticalZoom: false },
+    featureFlags: {
+      hasPackageCamera: true,
+      hasSmartDetect: true,
+      canOpticalZoom: false,
+      hasMic: true,
+    },
     // The bulk that must not survive.
     channels: [{ id: 0, bitrate: 3_000_000 }, { id: 1 }, { id: 2 }],
     stats: { rxBytes: 999, storage: { used: 1 } },
@@ -60,9 +72,29 @@ describe("summarizeCamera", () => {
       hasPackageCamera: true,
       hasSmartDetect: true,
       smartDetectTypes: ["person", "package"],
+      hasMic: true,
+      recordsAudio: true,
+      micVolume: 100,
       firmwareVersion: "4.70.55",
       isUpdating: undefined,
       lastSeen: "2025-08-29T20:40:00.000Z",
+    });
+  });
+
+  it("says a camera records no audio unless mic, mic switch and recording setting all agree", () => {
+    expect(summarizeCamera({ ...raw, isMicEnabled: false }).recordsAudio).toBe(false);
+    expect(
+      summarizeCamera({ ...raw, recordingSettings: { mode: "always", recordAudio: false } })
+        .recordsAudio,
+    ).toBe(false);
+    // Mic on and audio kept, but nothing recorded: no footage, so no sound either.
+    expect(
+      summarizeCamera({ ...raw, recordingSettings: { mode: "never", recordAudio: true } })
+        .recordsAudio,
+    ).toBe(false);
+    expect(summarizeCamera({ ...raw, featureFlags: {} })).toMatchObject({
+      hasMic: false,
+      recordsAudio: false,
     });
   });
 
