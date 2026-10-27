@@ -90,7 +90,9 @@ export const registerEventTools = (
         "vehicle, animal, package, licence plate), doorbell rings, and camera connection " +
         'changes. This is the tool for questions like "what happened at the front door last ' +
         "night\". Each result carries its camera's NAME as well as its id, so no second lookup " +
-        'is needed. Times may be given in the console\'s own local clock ("1am"), which is ' +
+        "is needed. Smart detections also say what was seen: `people` (how many people that " +
+        "one event tracked) and `vehicles` (each with its licence plate, colour and type where " +
+        'read). Times may be given in the console\'s own local clock ("1am"), which is ' +
         "what a question about last night means. READ ANY `warnings` IN THE RESULT BEFORE " +
         "REPORTING A COUNT: a camera with the detector switched off returns zero matches, " +
         "which is not the same as nothing having happened, and this tool says which case it " +

@@ -149,6 +149,77 @@ describe("summarizeEvent", () => {
     );
     expect(shaped.licensePlate).toBe("AB-123-CD");
   });
+
+  // Trimmed from a live gate event on Protect 7.x: three people and a car,
+  // with `metadata.licensePlate` absent and the plate only on the vehicle.
+  const gateEvent = {
+    id: "evt-gate",
+    type: "smartDetectZone",
+    camera: "cam2",
+    smartDetectTypes: ["face", "licensePlate", "person", "vehicle"],
+    metadata: {
+      count: null,
+      detectedThumbnails: [
+        { type: "person", objectId: "p1", attributes: { objectType: "person" } },
+        { type: "person", objectId: "p2", attributes: { associatedFaceTrackerID: 2798601 } },
+        { type: "person", objectId: "p3", attributes: { objectType: "person" } },
+        {
+          name: "GH320YF",
+          type: "vehicle",
+          objectId: "v1",
+          labels: ["smartDetectType:vehicle", "color:gray", "smartDetectType:licensePlate"],
+          attributes: {
+            color: { val: "gray", confidence: 73 },
+            matchedName: "GH320YF",
+            vehicleType: { val: "suv", confidence: 93 },
+          },
+        },
+      ],
+    },
+  };
+
+  it("reads the plate from the detected vehicle when metadata.licensePlate is absent", () => {
+    const shaped = summarizeEvent(gateEvent, cameras);
+    expect(shaped.licensePlate).toBe("GH320YF");
+    expect(shaped.vehicles).toEqual([{ licensePlate: "GH320YF", color: "gray", type: "suv" }]);
+  });
+
+  it("counts the people the event tracked", () => {
+    expect(summarizeEvent(gateEvent, cameras).people).toBe(3);
+  });
+
+  it("counts a person tracked twice in one event once", () => {
+    const shaped = summarizeEvent(
+      {
+        id: "e",
+        metadata: {
+          detectedThumbnails: [
+            { type: "person", objectId: "p1" },
+            { type: "person", objectId: "p1" },
+          ],
+        },
+      },
+      cameras,
+    );
+    expect(shaped.people).toBe(1);
+  });
+
+  it("falls back to matchedName, and leaves out a vehicle it knows nothing about", () => {
+    const named = summarizeEvent(
+      {
+        id: "e",
+        metadata: { detectedThumbnails: [{ type: "vehicle", attributes: { matchedName: "X1" } }] },
+      },
+      cameras,
+    );
+    expect(named.licensePlate).toBe("X1");
+    const bare = summarizeEvent(
+      { id: "e", metadata: { detectedThumbnails: [{ type: "vehicle", attributes: {} }] } },
+      cameras,
+    );
+    expect(bare).not.toHaveProperty("vehicles");
+    expect(bare).not.toHaveProperty("people");
+  });
 });
 
 describe("summarizeSensor", () => {

@@ -17,6 +17,11 @@ const isRecord = (value: unknown): value is Rec =>
 const str = (value: unknown): string | undefined =>
   typeof value === "string" && value.length > 0 ? value : undefined;
 
+const num = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) ? value : undefined;
+
+const rec = (value: unknown): Rec | undefined => (isRecord(value) ? value : undefined);
+
 /** Apply a summarizer across an array, passing non-arrays through untouched. */
 export const summarizeEach = <T>(value: unknown, fn: (item: Rec) => T): unknown =>
   Array.isArray(value) ? value.filter(isRecord).map(fn) : value;
@@ -105,11 +110,49 @@ export const summarizeCamera = (camera: Rec): Rec => {
  * would otherwise have to perform against a separate camera list, and get
  * silently wrong. The id is kept too, since the write and snapshot tools need it.
  */
+type Vehicle = { licensePlate?: string; color?: string; type?: string };
+
+/**
+ * What a smart detection actually saw, out of `metadata.detectedThumbnails`.
+ *
+ * Protect 7.x keeps one entry per tracked object there: each person, and each
+ * vehicle with its plate as `name` (also `attributes.matchedName`) and its
+ * colour and body type as labelled attributes. `metadata.licensePlate`, the
+ * older home of the plate, is absent on these consoles, so reading only that
+ * reported "a licence plate" without ever saying which, and "a person" for a
+ * gate event that had tracked three.
+ */
+const detectedObjects = (metadata: Rec | undefined): { people: number; vehicles: Vehicle[] } => {
+  const thumbnails = Array.isArray(metadata?.detectedThumbnails)
+    ? metadata.detectedThumbnails.filter(isRecord)
+    : [];
+  const people = new Set<string>();
+  const vehicles: Vehicle[] = [];
+  for (const [index, item] of thumbnails.entries()) {
+    const attributes = rec(item.attributes) ?? {};
+    if (item.type === "person") {
+      people.add(str(item.objectId) ?? `#${index}`);
+    } else if (item.type === "vehicle") {
+      const plate = str(item.name) ?? str(attributes.matchedName);
+      const color = str(rec(attributes.color)?.val);
+      const type = str(rec(attributes.vehicleType)?.val);
+      vehicles.push({
+        ...(plate ? { licensePlate: plate } : {}),
+        ...(color ? { color } : {}),
+        ...(type ? { type } : {}),
+      });
+    }
+  }
+  return { people: people.size, vehicles };
+};
+
 export const summarizeEvent = (event: Rec, cameras?: NameIndex, timeZone?: string): Rec => {
   const cameraId = str(event.camera);
   const metadata = isRecord(event.metadata) ? event.metadata : undefined;
+  const { people, vehicles } = detectedObjects(metadata);
   const plate =
-    metadata && isRecord(metadata.licensePlate) ? str(metadata.licensePlate.name) : undefined;
+    vehicles.find((v) => v.licensePlate)?.licensePlate ??
+    (metadata && isRecord(metadata.licensePlate) ? str(metadata.licensePlate.name) : undefined);
 
   return {
     id: event.id,
@@ -129,6 +172,10 @@ export const summarizeEvent = (event: Rec, cameras?: NameIndex, timeZone?: strin
       : {}),
     // Only present on smart detections, and the reason someone searched.
     ...(plate ? { licensePlate: plate } : {}),
+    // How many people this one event tracked. Not a head count across events:
+    // the same person walking past two cameras is two events.
+    ...(people > 0 ? { people } : {}),
+    ...(vehicles.some((v) => Object.keys(v).length > 0) ? { vehicles } : {}),
     ...(typeof event.score === "number" ? { score: event.score } : {}),
     // Whether a still frame exists, so the model knows
     // unifi_protect_get_event_thumbnail is worth calling. Deliberately a flag
@@ -220,11 +267,6 @@ export const summarizeUser = (user: Rec): Rec => ({
   isOwner: user.isOwner,
   lastLoginTime: isoTime(user.lastLoginTime),
 });
-
-const num = (value: unknown): number | undefined =>
-  typeof value === "number" && Number.isFinite(value) ? value : undefined;
-
-const rec = (value: unknown): Rec | undefined => (isRecord(value) ? value : undefined);
 
 /**
  * Storage moved between Protect releases, so both layouts are read.

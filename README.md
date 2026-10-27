@@ -9,7 +9,8 @@ at all unless you ask for them.
 
 - **Search recorded events over any time range** — motion, person / vehicle / animal / package /
   licence-plate detections, doorbell rings — with each result already carrying its camera's
-  **name**, not just an id.
+  **name**, not just an id, and what the camera saw: how many people, and each vehicle's plate,
+  colour and type.
 - **Snapshots and footage** — capture a frame now, pull an event's thumbnail, export an MP4.
   All written to disk by default, so a still frame does not silently cost you a context window.
 - **Devices** — cameras, lights, sensors (with their temperature, humidity and light readings),
@@ -382,6 +383,11 @@ always sends an explicit list, defaulting to motion, smart detections and rings.
 
 **Footage only exists if the camera was recording.** An empty event search may mean the camera's
 recording mode is `never`, not that nothing happened. `unifi_protect_list_cameras` shows the mode.
+
+**Plates live on the vehicle, not on the event.** On Protect 7.x, `metadata.licensePlate` is
+absent; each tracked object sits in `metadata.detectedThumbnails`, with the plate as the
+vehicle's `name`. `unifi_protect_list_events` reads it from there, and counts the people the
+event tracked.
 
 **Snapshots are forced.** Without that the console can return a cached frame minutes old, which
 is indistinguishable from a current one.
