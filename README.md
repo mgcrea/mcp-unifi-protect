@@ -13,6 +13,8 @@ at all unless you ask for them.
   colour and type.
 - **Snapshots and footage** — capture a frame now, pull an event's thumbnail, export an MP4.
   All written to disk by default, so a still frame does not silently cost you a context window.
+  An export says when its first frame was really recorded and whether it carries sound, so
+  several cameras' footage can be lined up.
 - **Devices** — cameras, lights, sensors (with their temperature, humidity and light readings),
   viewers, chimes, live views and users.
 - **Shaped responses.** A console camera record is 8-15 KB of JSON; a list of ten is over 100 KB.
@@ -306,7 +308,9 @@ Two prompts carry the procedure, which is the part a tool list cannot express:
 // 4. Pull the footage around it.
 {"name": "unifi_protect_export_video", "arguments": {
    "cameraId": "661a…", "start": "2026-08-30T02:13:30Z", "end": "2026-08-30T02:15:00Z"}}
-// → { "path": "/Users/you/.cache/unifi-protect/front-door-….mp4", "bytes": 18432000 }
+// → { "path": "/Users/you/.cache/unifi-protect/front-door-….mp4", "bytes": 18432000,
+//      "durationSeconds": 91.04, "startsAt": "2026-08-30T02:13:28.960Z",
+//      "audio": { "durationSeconds": 91.04, "sampleRate": 16000 }, … }
 ```
 
 ## Traps worth knowing
@@ -383,6 +387,14 @@ always sends an explicit list, defaulting to motion, smart detections and rings.
 
 **Footage only exists if the camera was recording.** An empty event search may mean the camera's
 recording mode is `never`, not that nothing happened. `unifi_protect_list_cameras` shows the mode.
+
+**An export starts early, and not by a fixed amount.** The console cuts on the keyframe before
+the requested start, so the file opens up to a second or so before it and runs that much long.
+`unifi_protect_export_video` reads the file's own duration and reports `startsAt`, the end
+minus the duration; against overlapping exports of one camera that lands within ~50 ms.
+Footage from several cameras lined up on the requested start instead is off by a different
+amount per camera. Some cameras' audio clocks also run ~0.2% slow, so their `audio`
+track is a few seconds short of the video over an hour.
 
 **Plates live on the vehicle, not on the event.** On Protect 7.x, `metadata.licensePlate` is
 absent; each tracked object sits in `metadata.detectedThumbnails`, with the plate as the

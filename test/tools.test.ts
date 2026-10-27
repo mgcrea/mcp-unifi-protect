@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Config } from "#/config";
 import { createServer } from "#/server";
 
-import { calledInit, calledUrl, fetchMock } from "./helpers.js";
+import { calledInit, calledUrl, fetchMock, mp4Fixture } from "./helpers.js";
 
 /** A camera whose zone asks for person while the device list blocks it. */
 const GATED_CAMERA = {
@@ -517,6 +517,62 @@ describe("export_video", () => {
       start: "2026-08-29T16:00:00.000Z",
       end: "2026-08-29T16:05:00.000Z",
     });
+  });
+
+  it("reports when the file really starts, and what sound it holds", async () => {
+    // Protect cuts on the keyframe before the requested start: a 60 s request
+    // came back 61.056 s long, all of the extra at the front.
+    const clip = mp4Fixture({
+      movie: [1000, 61_056],
+      tracks: [
+        { handler: "soun", clock: [16_000, 976_896] },
+        { handler: "vide", clock: [90_000, 5_492_999] },
+      ],
+    });
+    const impl = fetchMock(async (url) => {
+      const href = String(url);
+      if (href.includes("/cameras")) return jsonResponse([GATED_CAMERA]);
+      if (href.includes("/nvr")) return jsonResponse({ timezone: "UTC" });
+      return new Response(clip, { headers: { "content-type": "video/mp4" } });
+    });
+    const client = await connect(baseConfig, impl as unknown as typeof fetch);
+    const result = await client.callTool({
+      name: "unifi_protect_export_video",
+      arguments: { cameraId: "cam1", start: "2026-10-24T13:05:22Z", end: "2026-10-24T13:06:22Z" },
+    });
+    const payload = JSON.parse((result.content as { text: string }[])[0]!.text) as Record<
+      string,
+      unknown
+    >;
+    expect(payload).toMatchObject({
+      durationSeconds: 61.056,
+      startsAt: "2026-10-24T13:05:20.944Z",
+      audio: { durationSeconds: 61.056, sampleRate: 16_000 },
+      video: { durationSeconds: 61.033 },
+    });
+  });
+
+  it("says an export has no sound when it carries no audio track", async () => {
+    const clip = mp4Fixture({
+      movie: [1000, 60_000],
+      tracks: [{ handler: "vide", clock: [90_000, 5_400_000] }],
+    });
+    const impl = fetchMock(async (url) => {
+      const href = String(url);
+      if (href.includes("/cameras")) return jsonResponse([GATED_CAMERA]);
+      if (href.includes("/nvr")) return jsonResponse({ timezone: "UTC" });
+      return new Response(clip, { headers: { "content-type": "video/mp4" } });
+    });
+    const client = await connect(baseConfig, impl as unknown as typeof fetch);
+    const result = await client.callTool({
+      name: "unifi_protect_export_video",
+      arguments: { cameraId: "cam1", start: "2026-10-24T13:05:00Z", end: "2026-10-24T13:06:00Z" },
+    });
+    const payload = JSON.parse((result.content as { text: string }[])[0]!.text) as Record<
+      string,
+      unknown
+    >;
+    expect(payload.audio).toBeNull();
   });
 });
 

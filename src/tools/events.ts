@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { detectionWarnings } from "#/client/detection";
 import { resolveLocation } from "#/client/locations";
+import { readMp4Timing } from "#/client/mp4";
 import { summarizeEvent } from "#/client/shape";
 import type { ToolContext } from "#/tools/index";
 import {
@@ -427,7 +428,11 @@ export const registerEventTools = (
         "grows quickly with the window: expect tens of megabytes per minute at full quality, " +
         "and the call fails rather than exhausting memory if the export exceeds " +
         "UNIFI_PROTECT_MAX_DOWNLOAD_BYTES. Footage only exists if the camera was recording at " +
-        "the time, so check the recording mode before concluding that nothing happened.",
+        "the time, so check the recording mode before concluding that nothing happened. The " +
+        "file starts on the keyframe before `start`, so it runs a little long at the front: " +
+        "`startsAt` is when its first frame was recorded, which is what to line exports from " +
+        "several cameras up on. `audio` gives the sound track's length and sample rate, or " +
+        "null when the export has no sound.",
       inputSchema: z.object({
         cameraId: cameraIdArg,
         start: requiredTimeArg("Beginning of the footage to export."),
@@ -484,9 +489,37 @@ export const registerEventTools = (
           contentType,
           camera: name,
           window: { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() },
+          ...fileTiming(bytes, endMs),
         };
       }),
   );
+};
+
+/**
+ * When the exported file really starts, and what it holds.
+ *
+ * The console cuts an export on the keyframe before the requested start, so the
+ * file opens up to a second or so early, by a different amount each time; the
+ * end is where it was asked to be. Measured against overlapping exports of one
+ * camera, requested end minus duration finds the true start to within ~50 ms,
+ * and to within about a second across cameras whose audio clocks drift. Without
+ * this, lining up two cameras' exports means guessing.
+ */
+const fileTiming = (bytes: Uint8Array, endMs: number) => {
+  const timing = readMp4Timing(bytes);
+  if (!timing) return undefined;
+  const audio = timing.tracks.find((t) => t.handler === "soun");
+  const video = timing.tracks.find((t) => t.handler === "vide");
+  return {
+    durationSeconds: timing.durationSeconds,
+    startsAt: new Date(endMs - Math.round(timing.durationSeconds * 1000)).toISOString(),
+    // The audio track's own clock: how much sound there is, and its sample rate,
+    // which differs between camera models (11.025, 16 and 48 kHz on one system).
+    ...(audio
+      ? { audio: { durationSeconds: audio.durationSeconds, sampleRate: audio.timescale } }
+      : { audio: null }),
+    ...(video ? { video: { durationSeconds: video.durationSeconds } } : {}),
+  };
 };
 
 /**
